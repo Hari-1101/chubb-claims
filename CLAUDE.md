@@ -28,6 +28,19 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
 - Consumers MUST be idempotent (events may be delivered more than once).
 - We publish after commit for simplicity; the transactional outbox is the production approach (documented, not built).
 
+## Events (as built)
+- Topic `claims.events` (3 partitions), key = claimNumber, JSON value = `common.ClaimEvent`
+  (envelope + claim snapshot incl. `claimVersion`). Types: ClaimSubmitted, ClaimAssigned, InformationRequested,
+  InformationResponded, ReserveChanged, ClaimApproved, ClaimRejected, ClaimSettled.
+- Services call `ClaimEventPublisher.publish(claim, type)` inside the transaction; it is sent to Kafka from an
+  `@TransactionalEventListener(AFTER_COMMIT)`. Send failures are logged as `EVENT LOST`.
+- Consumer groups: `claims-notification`, `claims-reporting`. Each consumer calls
+  `ProcessedEventStore.markProcessed(eventId, group)` in the same transaction as its work and skips if false.
+- `reporting` builds `reporting_claim` from events only and MUST NOT query the claim tables; it ignores snapshots
+  with `claimVersion <= lastClaimVersion`. Reports never sum across currencies and include `lastUpdated`.
+- Tests: Awaitility (test scope) for async assertions. `EventFlowIntegrationTest` needs Kafka + Postgres running and
+  is not transactional (it leaves its claims in the dev DB).
+
 ## API contract
 - Backend publishes an OpenAPI spec via springdoc (`/v3/api-docs`, UI at `/swagger-ui.html`). The frontend is built against it.
 - Swagger tags: "Claimant", "Staff", "Reports". X-User-Id / X-User-Role are API-key security schemes, so Swagger UI
@@ -61,7 +74,9 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
   status, assignedOfficerId, createdAt, updatedAt, version.
 - `ClaimStatusHistory`: claim, fromStatus, toStatus, changedBy, reason, changedAt.
 - `InformationRequest`: claim, question, response, requestedBy, requestedAt, respondedAt.
-- `Notification` (later step): claimId, recipientEmail, message, createdAt.
+- `ReserveChange`: claim, oldAmount, newAmount, changedBy, reason, changedAt.
+- `Notification` (notification module): recipientId, recipientEmail, claimNumber, message, createdAt.
+- `ReportingClaim` (reporting module read model): one row per claim, built from events.
 
 ## Claim rules (all in `Claim` / `ClaimStatus`, never in controllers or services)
 - Created via `Claim.submit(...)`: status SUBMITTED; estimatedAmount kept exactly as entered;

@@ -34,7 +34,7 @@ One deployable service, split into modules as Java packages under `com.chubb.cla
 | `claim`        | Policies, claims, lifecycle rules, information requests, staff assignment. Owns the REST API and publishes domain events. |
 | `notification` | Consumes claim events and stores notifications for claimants. |
 | `reporting`    | Consumes claim events and keeps liability exposure and team workload figures up to date. |
-| `common`       | Shared plumbing (error handling, identity headers). No business logic. |
+| `common`       | Shared plumbing: identity headers, error handling, OpenAPI/Kafka config, the `ClaimEvent` contract, consumer idempotency (`ProcessedEventStore`). No business logic. |
 
 **Why not microservices?** At this scale microservices add deployment, monitoring, networking and data-consistency
 cost with no real benefit. A single service is simpler to run, test and debug.
@@ -45,39 +45,107 @@ it can be lifted out into its own service with the same event contract.
 
 ## 3. REST vs Kafka
 
-**REST** is used for anything a user is waiting on and needs an immediate answer to:
+### What uses which, and why
 
-- Claimant: submit claim, view own claims, respond to an information request.
-- Staff: view the queue, assign (pick up) a claim, request information, approve / reject / settle.
+| Interaction | Channel | Why |
+|-------------|---------|-----|
+| Submit claim, view my claims/claim detail, answer an information request | REST | The claimant is waiting for the result (claim number, validation errors). |
+| Staff queue, assign, request info, change reserve, approve, reject, settle | REST | The officer needs an immediate yes/no (e.g. 409 if the transition isn't allowed). |
+| Read notifications, exposure and workload reports | REST | A user is looking at a screen; reads come from the module's own tables. |
+| Telling other modules "a claim changed" | Kafka (`claims.events`) | Fire-and-forget fact about the past. The claim module doesn't wait for, or know about, its consumers. |
+| Creating claimant notifications | Kafka consumer (`claims-notification`) | Side effect that must not slow down or fail the officer's request. |
+| Updating exposure / workload figures | Kafka consumer (`claims-reporting`) | Read model kept separately, so reports never query the claim tables and could move to their own service. |
 
-**Kafka** is used for domain events — facts about something that has *already happened* — published only after the
-state change has been committed to the database:
+### Event flow
 
-| Event                  | When |
-|------------------------|------|
-| `ClaimSubmitted`       | A claimant submits a new claim. |
-| `ClaimStatusChanged`   | Any lifecycle transition. |
-| `InformationRequested` | An officer asks the claimant for more information. |
-| `ClaimDecided`         | A claim is approved or rejected. |
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Claimant / Officer
+    participant API as claim module<br/>(REST + service)
+    participant DB as PostgreSQL
+    participant K as Kafka<br/>claims.events (3 partitions)
+    participant N as notification module<br/>group claims-notification
+    participant R as reporting module<br/>group claims-reporting
 
-Consumers:
+    User->>API: POST /api/... (e.g. approve)
+    API->>DB: BEGIN; update claim + history; flush (version++)
+    API->>API: publishEvent(ClaimEvent) (held until commit)
+    API->>DB: COMMIT
+    API-->>User: 200 OK (claim detail)
+    API->>K: AFTER_COMMIT: send(key = claimNumber, ClaimEvent JSON)
+    par independent consumers
+        K->>N: ClaimEvent
+        N->>DB: BEGIN; insert processed_event (skip if exists); insert notification; COMMIT
+    and
+        K->>R: ClaimEvent
+        R->>DB: BEGIN; insert processed_event (skip if exists); upsert reporting_claim if claimVersion is newer; COMMIT
+    end
+```
 
-- `notification` — writes a `Notification` row for the claimant (e.g. "We need more information on claim CLM-…").
-- `reporting` — updates exposure-by-market-and-currency and workload-per-team figures.
+### Events
 
-**Idempotency.** Kafka gives at-least-once delivery, so the same event can arrive twice (retries, rebalances).
-Every consumer must be safe to run twice for the same event — e.g. by recording processed event IDs or by
-writing with a natural unique key so a duplicate becomes a no-op.
+One topic, `claims.events`, 3 partitions, created by a `NewTopic` bean. The message key is the claim number, so
+all events of one claim land on the same partition and are consumed in order.
 
-### Publish-after-commit vs. transactional outbox
+| Event | Published when |
+|-------|----------------|
+| `ClaimSubmitted` | A claimant submits a claim |
+| `ClaimAssigned` | An officer picks up a claim (→ UNDER_REVIEW) |
+| `InformationRequested` | Officer asks a question (→ INFO_REQUESTED) |
+| `InformationResponded` | Claimant answers (→ UNDER_REVIEW) |
+| `ReserveChanged` | Officer changes the reserve |
+| `ClaimApproved` / `ClaimRejected` | Decision made |
+| `ClaimSettled` | Approved claim settled |
 
-We publish the event **after** the database transaction commits. That is simple, and guarantees we never announce a
-change that was rolled back. The trade-off: if the process crashes between commit and publish, the event is lost.
+JSON envelope (`common.ClaimEvent`): `eventId` (UUID), `eventType`, `occurredAt`, `claimNumber`, `claimVersion`,
+plus a snapshot of the claim after the change: `status`, `market`, `currency`, `type`, `reserveAmount`,
+`assignedOfficerId`, `claimantId`, `submittedAt`. Because each event carries the full snapshot, consumers never
+need to call back into the claim module. `claimVersion` is the claim's optimistic-lock version after the change,
+so it increases with every change.
 
-The production approach is the **transactional outbox**: write the event to an `outbox` table in the *same*
-transaction as the state change, and have a separate relay publish outbox rows to Kafka (and mark them sent).
-This gives "change and event both happen or neither does". We document it here but don't build it, to keep the
-codebase small.
+### Consumers
+
+- **notification** stores a friendly message for the claimant on `ClaimSubmitted`, `InformationRequested`,
+  `ClaimApproved`, `ClaimRejected` and `ClaimSettled` (e.g. "We need more information about claim
+  CLM-SG-2026-000005. …"). Claimants read them via `GET /api/me/notifications`.
+- **reporting** keeps its own read model, `reporting_claim` (one row per claim), built only from events. Exposure
+  and workload reports are queries on that table.
+
+### Idempotency and ordering
+
+Kafka delivers at least once, so the same event can arrive twice (retries, rebalances, restarts).
+
+1. **`processed_event` (eventId + consumer group).** Each consumer inserts this row with
+   `ON CONFLICT DO NOTHING` *in the same transaction* as its work. If the row already exists, the event is skipped.
+   If the consumer crashes mid-way, both roll back and the redelivered event is processed normally.
+2. **`claimVersion` (reporting only).** A snapshot whose `claimVersion` is ≤ the row's `lastClaimVersion` is
+   ignored, so a late or replayed older event can never overwrite newer data.
+
+### Publish after commit, and the gap it leaves
+
+Services raise a Spring application event inside their transaction; `ClaimEventPublisher` sends it to Kafka from a
+`@TransactionalEventListener(phase = AFTER_COMMIT)`. So we never announce a change that was rolled back.
+
+**The gap:** if the database commit succeeds but the Kafka send fails (Kafka down, network error, or the process
+dies between commit and send), the event is lost. The claim itself is correct, but the claimant gets no
+notification and the reports miss the change. We log this loudly (`EVENT LOST: …` with the event id) and fail fast
+(`max.block.ms = 5000`) so the user's request isn't held up.
+
+**Production fix: transactional outbox.** Write the event to an `outbox` table in the *same* transaction as the claim
+change; a separate relay (polling, or CDC such as Debezium) publishes outbox rows to Kafka and marks them sent. Then
+"claim changed" and "event recorded" happen together or not at all; delivery becomes at-least-once, which our
+idempotent consumers already handle. We don't build it here to keep the codebase small.
+
+### Eventual consistency
+
+Notifications and reports are updated asynchronously, typically within a second of the change, but not in the same
+request. Right after an action a report may briefly show the old figures. Every report includes `lastUpdated` (when
+the read model last changed) so users can see how fresh it is. The claim detail itself (REST, claim tables) is
+always up to date.
+
+Claims created before events existed (e.g. created before this step) are not in the reporting read model; a
+production rollout would backfill it by replaying or seeding events.
 
 ## 4. API contract
 
@@ -104,6 +172,9 @@ The frontend is built against this spec, so the backend is the single source of 
 | POST | `/api/staff/claims/{claimNumber}/approve` | STAFF | → APPROVED (reason optional) |
 | POST | `/api/staff/claims/{claimNumber}/reject` | STAFF | → REJECTED (reason required) |
 | POST | `/api/staff/claims/{claimNumber}/settle` | STAFF | → SETTLED |
+| GET  | `/api/me/notifications` | CLAIMANT | My notifications, newest first (async, from events) |
+| GET  | `/api/staff/reports/exposure` | STAFF | Open-claim exposure by market + currency (+ by type) |
+| GET  | `/api/staff/reports/workload?team=` | STAFF | Per-officer workload, unassigned count, 7-day team performance |
 
 ### Layers
 
@@ -147,7 +218,8 @@ consumer, which we already have) is the production option.
 | `ClaimStatusHistory` | claim, fromStatus, toStatus, changedBy, reason, changedAt | Audit trail: one row per transition, plus an initial row (from = null → SUBMITTED). |
 | `InformationRequest` | claim, question, response, requestedBy, requestedAt, respondedAt | Open while `response` is empty. |
 | `ReserveChange`      | claim, oldAmount, newAmount, changedBy, reason, changedAt | Audit trail of reserve changes (reason required). |
-| `Notification`       | claimId, recipientEmail, message, createdAt | Later step. Written by the `notification` consumer. |
+| `Notification`       | recipientId, recipientEmail, claimNumber, message, createdAt | `notification` module, written by its Kafka consumer. Uses `claimNumber` (not a FK to `claim`) because the module only knows what events tell it; `recipientId` lets claimants list their own. |
+| `ReportingClaim`     | claimNumber, status, market, currency, type, reserveAmount, assignedOfficerId, submittedAt, decidedAt, lastClaimVersion, updatedAt | `reporting` module read model, one row per claim, built only from events. No FKs to the claim tables. |
 
 **Why one `AppUser` instead of a separate staff table?** The fake `X-User-Id` header has to map to a real user so
 we can tell which claims belong to which claimant (via `Policy.holder`) and who is staff. One table with a role keeps
@@ -164,6 +236,20 @@ later policy changes.
   `claim(assigned_officer_id)`, `claim(policy_id)` and on the foreign keys of the child tables.
 - `V2__seed_data.sql` — 4 claimants (`C001`–`C004`), 4 staff (`S001`–`S002` Motor, `S003`–`S004` Property) and
   8 policies covering all six markets.
+- `V3__events_notifications_reporting.sql` — `reserve_change` (audit), `notification`, `processed_event`
+  (PK eventId + consumer group) and `reporting_claim` (read model, indexed on status, assigned officer, decided_at).
+
+### Reports
+
+Both come from `reporting_claim` only, and include `lastUpdated`.
+
+- **Exposure** (`GET /api/staff/reports/exposure`): for open claims (not SETTLED/REJECTED), open claim count and
+  total reserve per **market + currency**, with a breakdown by type. There is no grand total: amounts in different
+  currencies are never added.
+- **Workload** (`GET /api/staff/reports/workload?team=`): per officer (all staff, or one team): open claims
+  assigned, count per status, oldest open claim (timestamp and age in whole days). Plus the number of open
+  unassigned claims (all teams: an unassigned claim has no team yet) and team performance: claims approved/rejected
+  in the last 7 days by those officers and the average hours from submission to decision for those claims.
 
 The database constraints repeat the most important domain rules on purpose: the Java code gives clear error
 messages, the database guarantees bad data can never be stored even if a bug slips through.
