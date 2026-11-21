@@ -155,3 +155,39 @@ open claims, 409 if already assigned). Read them, all made sense, kept them.
   business decision. I'm also learning to read the "assumptions" section
   properly. The open-only queue default was hidden in there, and I'd have
   missed it if I'd just skimmed.
+
+  ### 18:20 Step 4: Kafka, notifications, exposure, workload
+Claude Code added Kafka events after every claim change, claimant
+notifications, and the exposure + workload reports. 59 tests pass. It also
+ran a full claim through the real Kafka and checked all 7 events arrived in
+order.
+
+Key design choices (mine, from the plan):
+- Events are only sent AFTER the database saves, so we never announce
+  something that didn't happen. The gap: if Kafka fails right after the save,
+  the event is lost. It logs "EVENT LOST". Real fix in production is the
+  outbox pattern. Wrote this in ARCHITECTURE.md.
+- Reporting builds its own table from events only and never reads the claim
+  tables. That keeps it independent so it could become its own service later.
+  Trade-off: reports can be a second behind, so they show lastUpdated.
+- Each event has a claimVersion, so duplicate or late messages get ignored.
+  There's a test for this.
+
+Accepted its assumptions (notifications store the claim number instead of a
+link to the claim table, event classes live in common so modules don't depend
+on each other, "decided" = approved/rejected).
+
+Noticed 2 problems to fix later:
+- Integration tests leave real data in my dev database, so the reports
+  include test claims. Will give tests their own DB in the final step.
+- Kafka-down isn't tested. Will list it as a known gap in the README.
+
+- My take: Honestly, Kafka was the part I was most worried about. I hadn't
+  really used it before, and "eventual consistency" and "idempotent consumers"
+  sounded scary. I made myself ask the dumb questions: why not just query the
+  claims table for reports? Why does every event need a version number? Once
+  I got the answers it actually made sense. Version number = ignore anything
+  old or repeated. Separate reporting table = reports don't slow down claims.
+  The test data thing was buried at the bottom of its summary and I almost
+  scrolled past it. If I hadn't read that far, my demo dashboard would've
+  shown random test claims and I wouldn't have known why.
