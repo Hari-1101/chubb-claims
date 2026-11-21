@@ -12,7 +12,10 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
 
 ## Environment
 - Windows + PowerShell. Use `.\mvnw.cmd` (never assume a global `mvn`).
-- Infra: `docker compose up -d` (PostgreSQL 16, single-node Kafka in KRaft mode). Backend runs on the host.
+- Everything in Docker: `docker compose up --build` (Postgres, Kafka, backend image, frontend image with nginx);
+  UI http://localhost:4200, API http://localhost:8080. Reset demo data: `docker compose down -v`.
+- Develop on the host: `docker compose up -d postgres kafka` (PostgreSQL 16, single-node Kafka in KRaft mode), then
+  `.mvnw.cmd spring-boot:run` and `npm start`. Kafka listeners: `localhost:9092` (host) and `kafka:29092` (containers).
 - Backend: Spring Boot 3.5.x, Java 21, Maven. Base package `com.chubb.claims`.
 
 ## Architecture
@@ -127,10 +130,11 @@ SG, MY, HK, TH, ID, AU — each with its own currency.
 ## Testing
 - JUnit 5 + Mockito (from spring-boot-starter-test). No extra test libraries without asking.
 - Domain rules are tested with plain unit tests (no Spring context, no Docker). `ClaimsApplicationTests` needs
-  `docker compose up -d` and proves migrations + entity mappings line up.
+  `docker compose up -d postgres kafka` and proves migrations + entity mappings line up.
 - Every `@SpringBootTest` MUST use `@ActiveProfiles("test")` (`src/test/resources/application-test.yml`):
   database `claims_test` (created by `docker/postgres/create-test-db.sql` on a fresh volume), topic
   `claims.events.test`, groups `*.test`. Integration tests never touch the dev/demo database or topic.
 
 ## Out of scope
-Real auth/SSO, document uploads, payments, fraud checks, email delivery, caching, multi-tenancy, deployment.
+Real auth/SSO, document uploads, payments, fraud checks, email delivery, caching, multi-tenancy, production deployment
+(Docker Compose is for local runs and demos only).

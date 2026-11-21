@@ -6,8 +6,8 @@ This document explains *what* we built and *why*. The short-form rules live in `
 
 ```
             ┌──────────────┐        REST (OpenAPI)        ┌──────────────────────────────────────────┐
- Claimant ─▶│              │ ───────────────────────────▶ │  claims service (Spring Boot, one JVM)   │
- Staff    ─▶│   Frontend   │                              │                                          │
+ Claimant ─▶│   Frontend   │ ───────────────────────────▶ │  claims service (Spring Boot, one JVM)   │
+ Staff    ─▶│  (Angular)   │                              │                                          │
             └──────────────┘                              │  claim ──publish──┐                      │
                                                           │                   ▼                      │
                                                           │               ┌────────┐                 │
@@ -20,7 +20,7 @@ This document explains *what* we built and *why*. The short-form rules live in `
                                                                     PostgreSQL 16
 ```
 
-- **Frontend** (later) talks to the backend over REST only.
+- **Frontend** (Angular 22) talks to the backend over REST only (see section 10).
 - **Backend** is a single Spring Boot 3.5 / Java 21 service.
 - **PostgreSQL** stores all state; schema is managed with Flyway.
 - **Kafka** (single node, KRaft mode — no ZooKeeper) carries domain events between modules.
@@ -85,7 +85,9 @@ sequenceDiagram
 
 ### Events
 
-One topic, `claims.events`, 3 partitions, created by a `NewTopic` bean. The message key is the claim number, so
+One topic, `claims.events`, 3 partitions, created by a `NewTopic` bean. The topic name and a consumer-group suffix
+are properties (`claims.events.topic`, `claims.events.group-suffix`) so integration tests can use their own
+(`claims.events.test`, groups `*.test`; see section 12). The message key is the claim number, so
 all events of one claim land on the same partition and are consumed in order.
 
 | Event | Published when |
@@ -144,8 +146,9 @@ request. Right after an action a report may briefly show the old figures. Every 
 the read model last changed) so users can see how fresh it is. The claim detail itself (REST, claim tables) is
 always up to date.
 
-Claims created before events existed (e.g. created before this step) are not in the reporting read model; a
-production rollout would backfill it by replaying or seeding events.
+Claims created before the event flow existed are not in the reporting read model; a production rollout would
+backfill it by replaying or seeding events. (A fresh database, e.g. after `docker compose down -v`, has no such
+claims.)
 
 ## 4. API contract
 
@@ -341,11 +344,68 @@ How it works:
 In production this would be replaced by SSO/OAuth2 tokens (e.g. Spring Security resource server); only the
 interceptor would change.
 
-## 10. Testing
+## 10. Frontend
 
-JUnit 5 + Mockito (via `spring-boot-starter-test`). Priority is unit tests on the domain rules (lifecycle
-transitions, exposure grouping), then focused tests on services and controllers.
+Angular 22 in `/frontend`: standalone components, signals, zoneless change detection, plain SCSS (no component
+library). It only talks to the backend's REST API; DTO shapes are TypeScript interfaces in
+`core/models/api.models.ts`, matching the OpenAPI spec.
 
-## 11. Out of scope
+| Folder | Contents |
+|---|---|
+| `core/` | Demo login and `AuthStore` (signal + sessionStorage), `authInterceptor` (adds `X-User-Id` / `X-User-Role` to `/api` calls), `roleGuard`, `errorInterceptor` + error store, API services (the only place that calls HTTP), header |
+| `claimant/` | My claims, new claim, claim detail (with answer form), notifications |
+| `staff/` | Work queue, staff claim detail with actions, dashboard; `claim-actions.ts` |
+| `shared/` | Status badge, money pipe (always formats an amount in its own currency), error banner, timeline, info requests, claim facts, validators |
 
-Real auth/SSO, document uploads, payments, fraud checks, email delivery, caching, multi-tenancy, deployment.
+- **Errors**: the backend's ProblemDetail (title, detail, field errors) is shown in one banner. Background calls
+  (notification count every 15 s, dashboard refresh every 10 s) are marked silent so they don't flood it; a 401
+  sends the user back to the login page.
+- **Staff actions**: which buttons appear is decided in one function, `availableActions(claim, userId)`, which
+  mirrors `ClaimStatus.allowedNextStatuses()` and the "only the assigned officer" rule. It only hides buttons
+  that would fail; the backend remains the authority.
+- **Forms**: every form uses reactive forms with `[formGroup]` and `(ngSubmit)`. Client-side validation mirrors
+  the backend's Bean Validation (required, not blank, max length, amount with 2 decimals, no future incident date).
+- **Eventual consistency in the UI**: notifications and the dashboard say they update a moment after an action;
+  the dashboard shows `lastUpdated`.
+
+## 11. Running it
+
+```
+ browser ──▶ :4200 nginx (frontend) ──/api──▶ :8080 backend ──▶ postgres:5432
+                                                   │
+                                                   └──▶ kafka:29092 (containers) / localhost:9092 (host)
+```
+
+- `docker compose up --build` builds two images and starts four containers, in order, using healthchecks:
+  Postgres and Kafka → backend (healthy when `/actuator/health` is UP) → frontend.
+  - **Backend image**: multi-stage, Maven wrapper build on JDK 21, runs as a non-root user on a Java 21 JRE (alpine).
+  - **Frontend image**: Node build, then nginx serves the static app (falling back to `index.html` for client-side
+    routes) and proxies `/api` to the backend, so the browser sees one origin.
+- Kafka has two client listeners: `kafka:29092` for containers and `localhost:9092` for a backend started on the
+  host. That keeps the development workflow (`docker compose up -d postgres kafka`, then `.mvnw.cmd
+  spring-boot:run` and `npm start` with `proxy.conf.json`) working next to the all-in-Docker one.
+- Postgres keeps its data in the `postgres-data` volume; `docker compose down -v` resets to the seed data.
+  Kafka has no volume: its topics are recreated on start (consumers are idempotent and the read model is in Postgres).
+
+## 12. Testing
+
+JUnit 5 + Mockito (via `spring-boot-starter-test`), Awaitility for async assertions; Vitest for the frontend.
+
+- **Domain unit tests** (no Spring, no Docker): lifecycle transitions, claim creation, reserve rules, claim numbers.
+- **Service and consumer unit tests** (Mockito): access rules, events published only on success, duplicate
+  delivery ignored, stale `claimVersion` ignored, exposure never mixing currencies.
+- **Integration tests** (`@SpringBootTest`, need Postgres + Kafka): `ClaimApiIntegrationTest` (REST + database,
+  rolled back), `ClaimsApplicationTests` (migrations match the entities), `EventFlowIntegrationTest` (real commit
+  → Kafka → both consumers; not transactional).
+- **Test isolation**: every `@SpringBootTest` runs with profile `test` (`application-test.yml`): database
+  `claims_test` (created by `docker/postgres/create-test-db.sql` on a fresh volume), topic `claims.events.test`,
+  groups `claims-notification.test` / `claims-reporting.test`. Tests never write demo data, and a running app
+  never consumes test events.
+- **Frontend**: the header interceptor, the role guard, which staff action buttons appear, and that each action form
+  really submits (fills in the form, clicks submit, checks the API call and the reloaded claim). The last group was
+  added after a manual browser test found forms that silently did nothing.
+
+## 13. Out of scope
+
+Real auth/SSO, document uploads, payments, fraud checks, email delivery, caching, multi-tenancy, production
+deployment (Docker Compose is for local runs and demos only).
