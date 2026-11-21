@@ -27,6 +27,22 @@ export const routes: Routes = [
     loadComponent: () => import('./claimant/notifications').then((m) => m.Notifications),
   },
 
+  // Staff screens
+  {
+    path: 'staff',
+    canActivate: [roleGuard('STAFF')],
+    children: [
+      { path: 'queue', title: 'Work queue', loadComponent: () => import('./staff/work-queue').then((m) => m.WorkQueue) },
+      {
+        path: 'claims/:claimNumber',
+        title: 'Claim',
+        loadComponent: () => import('./staff/staff-claim-detail').then((m) => m.StaffClaimDetail),
+      },
+      { path: 'dashboard', title: 'Dashboard', loadComponent: () => import('./staff/dashboard').then((m) => m.Dashboard) },
+      { path: '', pathMatch: 'full', redirectTo: 'queue' },
+    ],
+  },
+
   // Start page: the user's home, or the login page.
   {
     path: '',

@@ -1,0 +1,113 @@
+<p><a routerLink="/staff/queue">← Work queue</a></p>
+
+@if (claim(); as claim) {
+  <h1>Claim {{ claim.claimNumber }}</h1>
+
+  <section class="card">
+    <h2>Actions</h2>
+    @if (actions().length) {
+      <div class="actions">
+        @if (has('assign')) {
+          <button type="button" data-action="assign" [disabled]="busy()" (click)="assign()">Assign to me</button>
+        }
+        @if (has('requestInformation')) {
+          <button type="button" data-action="requestInformation" class="secondary" [disabled]="busy()"
+                  (click)="toggle('requestInformation')">Request information</button>
+        }
+        @if (has('changeReserve')) {
+          <button type="button" data-action="changeReserve" class="secondary" [disabled]="busy()"
+                  (click)="toggle('changeReserve')">Change reserve</button>
+        }
+        @if (has('approve')) {
+          <button type="button" data-action="approve" [disabled]="busy()" (click)="toggle('approve')">Approve</button>
+        }
+        @if (has('reject')) {
+          <button type="button" data-action="reject" class="danger" [disabled]="busy()"
+                  (click)="toggle('reject')">Reject</button>
+        }
+        @if (has('settle')) {
+          <button type="button" data-action="settle" [disabled]="busy()" (click)="settle()">Mark as settled</button>
+        }
+      </div>
+    } @else {
+      <p class="muted" data-testid="no-actions">{{ noActionsReason() || 'No actions available.' }}</p>
+    }
+
+    @switch (openForm()) {
+      @case ('requestInformation') {
+        <form class="form action-form" (ngSubmit)="requestInformation()" novalidate>
+          <label>
+            Question for the claimant
+            <textarea [formControl]="question" rows="3" maxlength="2000"></textarea>
+            @if (question.invalid && question.touched) {
+              <span class="field-error">Please enter a question (up to 2000 characters).</span>
+            }
+          </label>
+          <div class="actions"><button type="submit" [disabled]="busy()">Send question</button></div>
+        </form>
+      }
+      @case ('changeReserve') {
+        <form class="form action-form" [formGroup]="reserveForm" (ngSubmit)="changeReserve()" novalidate>
+          <label>
+            New reserve
+            <div class="input-with-suffix">
+              <input type="number" formControlName="amount" min="0" step="0.01" />
+              <span class="suffix">{{ claim.currency }}</span>
+            </div>
+            <span class="hint">Must be between 0 and the policy's coverage limit.</span>
+            @if (reserveForm.controls.amount.invalid && reserveForm.controls.amount.touched) {
+              <span class="field-error">Enter an amount of 0 or more with at most 2 decimals.</span>
+            }
+          </label>
+          <label>
+            Reason
+            <input type="text" formControlName="reason" maxlength="500" placeholder="e.g. Workshop quote received" />
+            @if (reserveForm.controls.reason.invalid && reserveForm.controls.reason.touched) {
+              <span class="field-error">A reason is required.</span>
+            }
+          </label>
+          <div class="actions"><button type="submit" [disabled]="busy()">Save reserve</button></div>
+        </form>
+      }
+      @case ('approve') {
+        <form class="form action-form" (ngSubmit)="approve()" novalidate>
+          <label>
+            Reason (optional)
+            <input type="text" [formControl]="approveReason" maxlength="500" />
+          </label>
+          <div class="actions"><button type="submit" [disabled]="busy()">Approve claim</button></div>
+        </form>
+      }
+      @case ('reject') {
+        <form class="form action-form" (ngSubmit)="reject()" novalidate>
+          <label>
+            Reason (required, shown to the claimant)
+            <input type="text" [formControl]="rejectReason" maxlength="500" />
+            @if (rejectReason.invalid && rejectReason.touched) {
+              <span class="field-error">A reason is required to reject a claim.</span>
+            }
+          </label>
+          <div class="actions"><button type="submit" class="danger" [disabled]="busy()">Reject claim</button></div>
+        </form>
+      }
+    }
+  </section>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Details</h2>
+      <app-claim-facts [claim]="claim" [showStaffFields]="true" />
+    </section>
+    <section class="card">
+      <h2>Timeline</h2>
+      <app-claim-timeline [history]="claim.statusHistory" />
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Information requests</h2>
+    <app-information-request-list [requests]="claim.informationRequests" />
+  </section>
+} @else if (!failed()) {
+  <p class="muted">Loading…</p>
+}

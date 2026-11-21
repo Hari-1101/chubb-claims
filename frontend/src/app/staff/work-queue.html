@@ -1,0 +1,99 @@
+<h1>Work queue</h1>
+
+<form class="filters" (ngSubmit)="applyFilters()">
+  <label>
+    Status
+    <select name="status" [(ngModel)]="filters.status" (change)="applyFilters()">
+      <option value="">Open claims</option>
+      @for (s of statuses; track s) {
+        <option [value]="s">{{ statusLabel(s) }}</option>
+      }
+    </select>
+  </label>
+  <label>
+    Market
+    <select name="market" [(ngModel)]="filters.market" (change)="applyFilters()">
+      <option value="">All markets</option>
+      @for (m of markets; track m) {
+        <option [value]="m">{{ m }}</option>
+      }
+    </select>
+  </label>
+  <label>
+    Type
+    <select name="type" [(ngModel)]="filters.type" (change)="applyFilters()">
+      <option value="">All types</option>
+      @for (t of types; track t) {
+        <option [value]="t">{{ t }}</option>
+      }
+    </select>
+  </label>
+  <label>
+    Assigned
+    <select name="assigned" [(ngModel)]="filters.assigned" (change)="applyFilters()">
+      <option value="any">Anyone</option>
+      <option value="me">Me</option>
+      <option value="unassigned">Unassigned</option>
+    </select>
+  </label>
+  <button type="submit" class="secondary">Refresh</button>
+</form>
+
+@if (page(); as page) {
+  @if (page.content.length) {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Claim</th>
+            <th>Type</th>
+            <th>Market</th>
+            <th>Status</th>
+            <th class="num">Reserve</th>
+            <th>Assigned to</th>
+            <th>Submitted</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (claim of page.content; track claim.claimNumber) {
+            <tr>
+              <td><a [routerLink]="['/staff/claims', claim.claimNumber]">{{ claim.claimNumber }}</a></td>
+              <td>{{ claim.type }}</td>
+              <td>{{ claim.market }}</td>
+              <td><app-status-badge [status]="claim.status" /></td>
+              <td class="num">{{ claim.reserveAmount | money: claim.currency }}</td>
+              <td>{{ claim.assignedOfficerId ? who(claim.assignedOfficerId) : 'Unassigned' }}</td>
+              <td>{{ claim.createdAt | date: 'medium' }}</td>
+              <td>
+                @if (canAssign(claim)) {
+                  <button type="button" class="small" [disabled]="assigning() === claim.claimNumber"
+                          (click)="assignToMe(claim)">Assign to me</button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="page-title">
+      <span class="muted small">
+        Page {{ page.page + 1 }} of {{ page.totalPages }} · {{ page.totalElements }} claims
+      </span>
+      <div class="actions">
+        <button type="button" class="secondary small" [disabled]="page.page === 0" (click)="goTo(page.page - 1)">
+          ← Previous
+        </button>
+        <button type="button" class="secondary small" [disabled]="page.page + 1 >= page.totalPages"
+                (click)="goTo(page.page + 1)">
+          Next →
+        </button>
+      </div>
+    </div>
+  } @else {
+    <div class="card empty">No claims match these filters.</div>
+  }
+} @else {
+  <p class="muted">Loading…</p>
+}

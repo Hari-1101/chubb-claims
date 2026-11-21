@@ -1,0 +1,125 @@
+<div class="page-title">
+  <h1>Dashboard</h1>
+  <div class="actions centered">
+    <span class="muted small">Last updated: {{ lastUpdated() ? (lastUpdated() | date: 'medium') : 'no data yet' }}</span>
+    <button type="button" class="secondary small" [disabled]="loading()" (click)="refresh(false)">Refresh</button>
+  </div>
+</div>
+<p class="note">
+  These figures are built from claim events, so they update a moment after an action (auto-refresh every 10 seconds).
+</p>
+
+<section class="card">
+  <h2>Liability exposure (open claims)</h2>
+  @if (exposure(); as exposure) {
+    @if (exposure.exposures.length) {
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Market</th>
+              <th>Currency</th>
+              <th>Type</th>
+              <th class="num">Open claims</th>
+              <th class="num">Total reserve</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of exposure.exposures; track row.market + row.currency) {
+              <tr>
+                <td><strong>{{ row.market }}</strong></td>
+                <td>{{ row.currency }}</td>
+                <td>All</td>
+                <td class="num">{{ row.openClaims }}</td>
+                <td class="num"><strong>{{ row.totalReserve | money: row.currency }}</strong></td>
+              </tr>
+              @for (t of row.byType; track t.type) {
+                <tr class="sub">
+                  <td></td>
+                  <td></td>
+                  <td>{{ t.type }}</td>
+                  <td class="num">{{ t.openClaims }}</td>
+                  <td class="num">{{ t.totalReserve | money: row.currency }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <p class="muted">No open claims.</p>
+    }
+    <p class="muted small">
+      Amounts are shown per market and currency. There is deliberately no grand total: we never add up different
+      currencies.
+    </p>
+  } @else {
+    <p class="muted">Loading…</p>
+  }
+</section>
+
+<section class="card">
+  <div class="page-title">
+    <h2>Team workload</h2>
+    <label>
+      <select name="team" [(ngModel)]="team" (change)="refresh(false)" aria-label="Team">
+        <option value="">All teams</option>
+        @for (t of teams; track t) {
+          <option [value]="t">{{ t }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  @if (workload(); as workload) {
+    <div class="stats">
+      <div class="stat">
+        <div class="muted small">Unassigned open claims (all teams)</div>
+        <div class="value">{{ workload.unassignedOpenClaims }}</div>
+      </div>
+      <div class="stat">
+        <div class="muted small">Decided in last {{ workload.teamPerformance.periodDays }} days</div>
+        <div class="value">{{ workload.teamPerformance.claimsDecided }}</div>
+      </div>
+      <div class="stat">
+        <div class="muted small">Average hours to decision</div>
+        <div class="value">{{ workload.teamPerformance.averageHoursToDecision ?? '—' }}</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Officer</th>
+            <th>Team</th>
+            <th class="num">Open claims</th>
+            @for (s of openStatuses; track s) {
+              <th class="num">{{ statusLabel(s) }}</th>
+            }
+            <th class="num">Oldest open claim</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (o of workload.officers; track o.officerId) {
+            <tr>
+              <td>{{ o.name }} <span class="muted">({{ o.officerId }})</span></td>
+              <td>{{ o.team }}</td>
+              <td class="num"><strong>{{ o.openClaims }}</strong></td>
+              @for (s of openStatuses; track s) {
+                <td class="num">{{ o.openClaimsByStatus[s] ?? 0 }}</td>
+              }
+              <td class="num">
+                {{ o.oldestOpenClaimAgeDays === null ? '—' : o.oldestOpenClaimAgeDays + ' days' }}
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="8" class="muted">No officers in this team.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <p class="muted">Loading…</p>
+  }
+</section>
