@@ -88,6 +88,40 @@ The backend generates an OpenAPI 3 spec from the controllers using springdoc:
 
 The frontend is built against this spec, so the backend is the single source of truth for the API shape.
 
+### Endpoints
+
+| Method | Path | Role | What it does |
+|--------|------|------|--------------|
+| GET  | `/api/me/policies` | CLAIMANT | My policies |
+| POST | `/api/claims` | CLAIMANT | Submit a claim on my own policy → 201 |
+| GET  | `/api/claims/mine` | CLAIMANT | My claims, newest first |
+| GET  | `/api/claims/{claimNumber}` | CLAIMANT, STAFF | Detail + status history + information requests (claimants: own only, else 404) |
+| POST | `/api/claims/{claimNumber}/information-requests/{requestId}/response` | CLAIMANT | Answer → UNDER_REVIEW |
+| GET  | `/api/staff/claims?status&market&type&assigned=me\|unassigned\|any&page&size` | STAFF | Work queue, oldest first, paginated |
+| POST | `/api/staff/claims/{claimNumber}/assign` | STAFF | Assign to me → UNDER_REVIEW |
+| POST | `/api/staff/claims/{claimNumber}/information-requests` | STAFF | Ask the claimant → INFO_REQUESTED |
+| PUT  | `/api/staff/claims/{claimNumber}/reserve` | STAFF | Change reserve (0 < amount ≤ coverage limit) |
+| POST | `/api/staff/claims/{claimNumber}/approve` | STAFF | → APPROVED (reason optional) |
+| POST | `/api/staff/claims/{claimNumber}/reject` | STAFF | → REJECTED (reason required) |
+| POST | `/api/staff/claims/{claimNumber}/settle` | STAFF | → SETTLED |
+
+### Layers
+
+`Controller` (validate input, return DTO) → `Service` (`@Transactional`: load, check access, call the domain,
+map to DTO) → `Claim` / `ClaimStatus` (business rules) → `Repository`. DTOs are records; entities never leave
+the service layer. Mapping happens inside the transaction because open-in-view is off.
+
+### Errors (RFC 7807 ProblemDetail)
+
+| Status | When |
+|--------|------|
+| 400 | Bean Validation failures (field list in `errors`), malformed JSON, bad parameter values |
+| 401 | Missing/unknown `X-User-Id`, invalid `X-User-Role`, or role doesn't match the user |
+| 403 | Wrong role for the endpoint; someone else's policy; claim assigned to another officer (or not assigned yet) |
+| 404 | Unknown claim/policy/request, or a claimant asking for someone else's claim |
+| 409 | Invalid status transition; optimistic-lock conflict (two people changed the same claim at once) |
+| 422 | Other business rules (e.g. incident date in the future, reserve above coverage, request already answered) |
+
 ## 5. Caching — none, deliberately
 
 - Data volume is small; PostgreSQL with sensible indexes answers these queries quickly.
@@ -202,8 +236,17 @@ Real authentication is out of scope. Each request carries:
 - `X-User-Id` — an `AppUser.id` (seeded: claimants `C001`–`C004`, staff `S001`–`S004`)
 - `X-User-Role` — `CLAIMANT` or `STAFF` (must match the user's role)
 
-The backend uses these to decide what the caller may see and do (claimants see only their own claims; only staff
-can assign and decide). In production this would be replaced by SSO/OAuth2 tokens.
+How it works:
+
+- `IdentityInterceptor` runs on every `/api/**` request: loads the `AppUser` (401 if headers are missing, the user
+  is unknown, or the role doesn't match) and stores a `CurrentUser` on the request.
+- Controllers receive it as a method parameter (`CurrentUser user`) via `CurrentUserArgumentResolver`.
+- `@RequireRole(...)` on a controller or method restricts it to roles (403 otherwise).
+- Finer rules live in the services: claimants only see their own claims (404 for others, so we don't reveal they
+  exist); only the assigned officer can act on an assigned claim (403).
+
+In production this would be replaced by SSO/OAuth2 tokens (e.g. Spring Security resource server); only the
+interceptor would change.
 
 ## 10. Testing
 

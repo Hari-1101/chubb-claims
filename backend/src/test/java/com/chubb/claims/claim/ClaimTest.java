@@ -158,6 +158,71 @@ class ClaimTest {
             assertThrows(BusinessRuleException.class, () -> claim.changeReserve(new BigDecimal("150000.01")));
             assertEquals(new BigDecimal("12000.00"), claim.getReserveAmount(), "reserve unchanged");
         }
+
+        @Test
+        void reserveOfAClosedClaimCannotBeChanged() {
+            for (ClaimStatus finalStatus : List.of(SETTLED, REJECTED)) {
+                Claim claim = claimIn(finalStatus);
+                assertThrows(BusinessRuleException.class, () -> claim.changeReserve(new BigDecimal("100.00")));
+            }
+        }
+    }
+
+    @Nested
+    class Workflow {
+
+        @Test
+        void assignToMovesToUnderReviewAndSetsOfficer() {
+            Claim claim = newClaim();
+            claim.assignTo(OFFICER_ID);
+
+            assertEquals(UNDER_REVIEW, claim.getStatus());
+            assertEquals(OFFICER_ID, claim.getAssignedOfficerId());
+            assertEquals(OFFICER_ID, claim.getStatusHistory().get(1).getChangedBy());
+        }
+
+        @Test
+        void alreadyAssignedClaimCannotBeAssignedAgain() {
+            Claim claim = newClaim();
+            claim.assignTo(OFFICER_ID);
+
+            assertThrows(InvalidStatusTransitionException.class, () -> claim.assignTo("S002"));
+            assertEquals(OFFICER_ID, claim.getAssignedOfficerId(), "assignment unchanged");
+        }
+
+        @Test
+        void requestingInformationCreatesAnOpenRequest() {
+            Claim claim = claimIn(UNDER_REVIEW);
+            InformationRequest request = claim.requestInformation("Please send the police report", OFFICER_ID);
+
+            assertEquals(INFO_REQUESTED, claim.getStatus());
+            assertTrue(request.isOpen());
+            assertEquals(OFFICER_ID, request.getRequestedBy());
+        }
+
+        @Test
+        void respondingClosesTheRequestAndReturnsToUnderReview() {
+            Claim claim = claimIn(UNDER_REVIEW);
+            InformationRequest request = claim.requestInformation("Photos?", OFFICER_ID);
+
+            claim.respondToInformationRequest(request, "Attached", CLAIMANT_ID);
+
+            assertEquals(UNDER_REVIEW, claim.getStatus());
+            assertFalse(request.isOpen());
+            assertEquals("Attached", request.getResponse());
+            assertNotNull(request.getRespondedAt());
+        }
+
+        @Test
+        void answeredRequestCannotBeAnsweredAgain() {
+            Claim claim = claimIn(UNDER_REVIEW);
+            InformationRequest request = claim.requestInformation("Photos?", OFFICER_ID);
+            claim.respondToInformationRequest(request, "Attached", CLAIMANT_ID);
+
+            assertThrows(BusinessRuleException.class,
+                    () -> claim.respondToInformationRequest(request, "Again", CLAIMANT_ID));
+            assertEquals("Attached", request.getResponse());
+        }
     }
 
     @Nested

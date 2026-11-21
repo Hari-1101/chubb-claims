@@ -1,0 +1,7 @@
+package com.chubb.claims.claim;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record InformationResponseRequest(@NotBlank @Size(max = 2000) String response) {
+}

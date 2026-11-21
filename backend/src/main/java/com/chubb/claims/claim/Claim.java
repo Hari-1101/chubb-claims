@@ -134,7 +134,7 @@ public class Claim {
         claim.description = description;
         claim.estimatedAmount = estimatedAmount;
         // The estimate is kept exactly as entered; the reserve can never exceed what the policy covers.
-        claim.changeReserve(estimatedAmount.min(policy.getCoverageLimit()));
+        claim.setReserve(estimatedAmount.min(policy.getCoverageLimit()));
         claim.status = ClaimStatus.SUBMITTED;
         claim.createdAt = Instant.now();
         claim.updatedAt = claim.createdAt;
@@ -143,8 +143,45 @@ public class Claim {
         return claim;
     }
 
-    /** Sets the reserve. It must be between zero and the policy's coverage limit. */
+    /** Changes the reserve of an open claim. It must be between zero and the policy's coverage limit. */
     public void changeReserve(BigDecimal newReserve) {
+        if (!isOpen()) {
+            throw new BusinessRuleException("Reserve of claim %s cannot be changed: it is %s".formatted(claimNumber, status));
+        }
+        setReserve(newReserve);
+    }
+
+    /**
+     * An officer picks up the claim: SUBMITTED → UNDER_REVIEW, and the claim is assigned to them.
+     *
+     * @throws InvalidStatusTransitionException if the claim is not SUBMITTED (e.g. already picked up)
+     */
+    public void assignTo(String officerId) {
+        Objects.requireNonNull(officerId, "officerId");
+        transitionTo(ClaimStatus.UNDER_REVIEW, officerId, "Assigned to " + officerId);
+        this.assignedOfficerId = officerId;
+    }
+
+    /** UNDER_REVIEW → INFO_REQUESTED. Returns the new (unsaved) request. */
+    public InformationRequest requestInformation(String question, String officerId) {
+        transitionTo(ClaimStatus.INFO_REQUESTED, officerId, "Information requested");
+        return new InformationRequest(this, question, officerId);
+    }
+
+    /**
+     * The claimant answers an open information request: INFO_REQUESTED → UNDER_REVIEW.
+     * The caller must make sure the request belongs to this claim.
+     */
+    public void respondToInformationRequest(InformationRequest request, String response, String respondedBy) {
+        Objects.requireNonNull(request, "request");
+        if (!request.isOpen()) {
+            throw new BusinessRuleException("Information request %d has already been answered".formatted(request.getId()));
+        }
+        transitionTo(ClaimStatus.UNDER_REVIEW, respondedBy, "Claimant responded to information request");
+        request.recordResponse(response);
+    }
+
+    private void setReserve(BigDecimal newReserve) {
         Objects.requireNonNull(newReserve, "newReserve");
         if (newReserve.signum() < 0) {
             throw new BusinessRuleException("Reserve amount cannot be negative");

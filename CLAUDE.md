@@ -30,6 +30,17 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
 
 ## API contract
 - Backend publishes an OpenAPI spec via springdoc (`/v3/api-docs`, UI at `/swagger-ui.html`). The frontend is built against it.
+- Swagger tags: "Claimant", "Staff". X-User-Id / X-User-Role are added to every operation (`OpenApiConfig`).
+
+## API conventions
+- Controllers are thin: validate (Bean Validation), call a service, return a DTO. No business rules in controllers.
+- Request/response DTOs are Java records; never return JPA entities. Services are `@Transactional` and map
+  entities to DTOs inside the transaction (open-in-view is off).
+- Access control: `@RequireRole` on the controller (or method) → 403. Claimants only see their own claims
+  (others' claims are 404). After assignment only the assigned officer can act on a claim (403).
+- Errors are RFC 7807 ProblemDetail from `GlobalExceptionHandler`: 400 validation (with `errors` field list),
+  401 identity, 403 access, 404 not found, 409 invalid transition / optimistic lock, 422 other business rules.
+- CORS: only `http://localhost:4200` (property `claims.cors.allowed-origin`).
 
 ## Caching
 - None, deliberately. Do not add caching. (Redis is noted as a production option for the exposure dashboard only.)

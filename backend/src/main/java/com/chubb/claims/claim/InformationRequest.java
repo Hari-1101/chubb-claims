@@ -56,6 +56,12 @@ public class InformationRequest {
         return response == null;
     }
 
+    /** Called by {@link Claim#respondToInformationRequest}, which also moves the claim back to UNDER_REVIEW. */
+    void recordResponse(String response) {
+        this.response = Objects.requireNonNull(response, "response");
+        this.respondedAt = Instant.now();
+    }
+
     public Long getId() {
         return id;
     }
