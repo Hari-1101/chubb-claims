@@ -39,13 +39,24 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
 - `Claim` uses an optimistic-lock `version` column.
 
 ## Core entities
-- `Policy` (seeded): policyNumber, holderName, holderEmail, market, productType (MOTOR|PROPERTY), currency, coverageLimit.
+- `AppUser` (seeded, package `common`): id, name, email, role (CLAIMANT|STAFF), team (staff only).
+  The id is what `X-User-Id` carries. Seeded ids: claimants `C001`–`C004`, staff `S001`–`S004`.
+- `Policy` (seeded): policyNumber, holder (FK to AppUser, must be a CLAIMANT), market, productType (MOTOR|PROPERTY),
+  currency, coverageLimit.
 - `Claim`: claimNumber, policy, type, market, currency, incidentDate, description, estimatedAmount, reserveAmount,
   status, assignedOfficerId, createdAt, updatedAt, version.
 - `ClaimStatusHistory`: claim, fromStatus, toStatus, changedBy, reason, changedAt.
 - `InformationRequest`: claim, question, response, requestedBy, requestedAt, respondedAt.
-- `Notification`: claimId, recipientEmail, message, createdAt.
-- `StaffUser` (seeded): id, name, team.
+- `Notification` (later step): claimId, recipientEmail, message, createdAt.
+
+## Claim rules (all in `Claim` / `ClaimStatus`, never in controllers or services)
+- Created via `Claim.submit(...)`: status SUBMITTED; reserveAmount = estimatedAmount; type, market and currency
+  copied from the policy; an initial history row (from = null, to = SUBMITTED) is written.
+- incidentDate cannot be in the future ("today" = today in the claim's market time zone, see `Market`).
+- reserveAmount must be >= 0 and <= policy coverageLimit (`Claim.changeReserve`).
+- Claim number: `CLM-<MARKET>-<YEAR>-<6-digit seq>` from Postgres sequence `claim_number_seq` (`ClaimNumberGenerator`).
+- Rule violations throw `BusinessRuleException`; invalid status moves throw `InvalidStatusTransitionException`
+  (both in `common`).
 
 ## Claim lifecycle (rules live in ONE place in the domain, never in controllers)
 ```
@@ -56,7 +67,9 @@ UNDER_REVIEW  -> APPROVED
 APPROVED      -> SETTLED
 UNDER_REVIEW  -> REJECTED
 ```
-Any other transition is rejected with a clear error.
+SETTLED and REJECTED are final. Any other transition is rejected with a clear error.
+`ClaimStatus.allowedNextStatuses()` is the single source of truth; `Claim.transitionTo(newStatus, changedBy, reason)`
+enforces it and writes a `ClaimStatusHistory` row.
 
 ## Markets (sample; names assumed)
 SG, MY, HK, TH, ID, AU — each with its own currency.
@@ -66,11 +79,13 @@ SG, MY, HK, TH, ID, AU — each with its own currency.
   grouped by market AND currency. NEVER add amounts across currencies.
 
 ## Auth
-- No real authentication (out of scope). Fake identity via headers `X-User-Id` and `X-User-Role` (CLAIMANT | STAFF),
-  using seeded users.
+- No real authentication (out of scope). Fake identity via headers `X-User-Id` and `X-User-Role` (CLAIMANT | STAFF).
+  `X-User-Id` must be an existing `AppUser.id`; that's how we know which claims belong to which claimant.
 
 ## Testing
 - JUnit 5 + Mockito (from spring-boot-starter-test). No extra test libraries without asking.
+- Domain rules are tested with plain unit tests (no Spring context, no Docker). `ClaimsApplicationTests` needs
+  `docker compose up -d` and proves migrations + entity mappings line up.
 
 ## Out of scope
 Real auth/SSO, document uploads, payments, fraud checks, email delivery, caching, multi-tenancy, deployment.
