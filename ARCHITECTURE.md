@@ -62,24 +62,24 @@ it can be lifted out into its own service with the same event contract.
 sequenceDiagram
     autonumber
     actor User as Claimant / Officer
-    participant API as claim module<br/>(REST + service)
+    participant API as claim module<br/>(REST and service)
     participant DB as PostgreSQL
     participant K as Kafka<br/>claims.events (3 partitions)
     participant N as notification module<br/>group claims-notification
     participant R as reporting module<br/>group claims-reporting
 
     User->>API: POST /api/... (e.g. approve)
-    API->>DB: BEGIN; update claim + history; flush (version++)
+    API->>DB: BEGIN, update claim and history, flush (version incremented)
     API->>API: publishEvent(ClaimEvent) (held until commit)
     API->>DB: COMMIT
     API-->>User: 200 OK (claim detail)
-    API->>K: AFTER_COMMIT: send(key = claimNumber, ClaimEvent JSON)
+    API->>K: after commit, send(key = claimNumber, ClaimEvent JSON)
     par independent consumers
         K->>N: ClaimEvent
-        N->>DB: BEGIN; insert processed_event (skip if exists); insert notification; COMMIT
+        N->>DB: BEGIN, insert processed_event (skip if exists), insert notification, then COMMIT
     and
         K->>R: ClaimEvent
-        R->>DB: BEGIN; insert processed_event (skip if exists); upsert reporting_claim if claimVersion is newer; COMMIT
+        R->>DB: BEGIN, insert processed_event (skip if exists), upsert reporting_claim if claimVersion is newer, then COMMIT
     end
 ```
 
