@@ -1,0 +1,64 @@
+<h1>New claim</h1>
+
+@if (policies(); as policies) {
+  <form class="card form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <label>
+      Policy
+      <select formControlName="policyNumber">
+        <option value="" disabled>Choose one of your policies…</option>
+        @for (policy of policies; track policy.policyNumber) {
+          <option [value]="policy.policyNumber">
+            {{ policy.policyNumber }} · {{ policy.productType }} · {{ policy.market }} ({{ policy.currency }})
+          </option>
+        }
+      </select>
+      @if (showError('policyNumber')) {
+        <span class="field-error">Please choose a policy.</span>
+      }
+    </label>
+
+    <label>
+      Incident date
+      <input type="date" formControlName="incidentDate" [max]="today" />
+      @if (showError('incidentDate')) {
+        <span class="field-error">
+          @if (form.controls.incidentDate.hasError('future')) {
+            The incident date can't be in the future.
+          } @else {
+            Please enter the incident date.
+          }
+        </span>
+      }
+    </label>
+
+    <label>
+      What happened?
+      <textarea formControlName="description" rows="5" maxlength="2000"
+                placeholder="Describe the incident and the damage"></textarea>
+      <span class="hint">{{ form.controls.description.value.length }} / 2000</span>
+      @if (showError('description')) {
+        <span class="field-error">Please describe what happened (up to 2000 characters).</span>
+      }
+    </label>
+
+    <label>
+      Estimated amount
+      <div class="input-with-suffix">
+        <input type="number" formControlName="estimatedAmount" min="0.01" step="0.01" placeholder="0.00" />
+        <span class="suffix">{{ selectedPolicy()?.currency ?? '' }}</span>
+      </div>
+      @if (selectedPolicy(); as policy) {
+        <span class="hint">Your cover for this policy: {{ policy.coverageLimit | money: policy.currency }}</span>
+      }
+      @if (showError('estimatedAmount')) {
+        <span class="field-error">Enter an amount greater than 0 with at most 2 decimals.</span>
+      }
+    </label>
+
+    <div class="actions">
+      <button type="submit" [disabled]="saving()">{{ saving() ? 'Submitting…' : 'Submit claim' }}</button>
+    </div>
+  </form>
+} @else {
+  <p class="muted">Loading your policies…</p>
+}

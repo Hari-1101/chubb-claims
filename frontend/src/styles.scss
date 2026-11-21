@@ -1,0 +1,506 @@
+// Small, plain style for the whole app. No component library: tables, cards, forms, badges.
+
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --text: #1f2933;
+  --muted: #616e7c;
+  --border: #d9dde3;
+  --primary: #01579b;
+  --primary-hover: #014377;
+  --danger: #b42318;
+  --danger-bg: #fdecea;
+  --radius: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0.5rem 0 1rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem;
+}
+
+a {
+  color: var(--primary);
+}
+
+code {
+  font-size: 0.9em;
+}
+
+.container {
+  max-width: 1150px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+main.container {
+  padding-top: 1rem;
+  padding-bottom: 3rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.pre {
+  white-space: pre-wrap;
+}
+
+// ---------- header ----------
+.app-header {
+  background: var(--primary);
+  color: #fff;
+
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    min-height: 56px;
+    flex-wrap: wrap;
+  }
+
+  .brand {
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  nav {
+    display: flex;
+    gap: 0.25rem;
+    flex: 1;
+    flex-wrap: wrap;
+
+    a {
+      color: #dbe9f6;
+      text-decoration: none;
+      padding: 0.35rem 0.7rem;
+      border-radius: var(--radius);
+
+      &.active,
+      &:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+      }
+    }
+  }
+
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+
+    .muted {
+      color: #bcd3e8;
+    }
+  }
+
+  .count {
+    display: inline-block;
+    min-width: 1.4em;
+    padding: 0 0.4em;
+    margin-left: 0.25rem;
+    border-radius: 999px;
+    background: #ffb300;
+    color: #1f2933;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+  }
+}
+
+// ---------- layout ----------
+.page-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+
+  &.highlight {
+    border-left: 4px solid #ffb300;
+  }
+
+  &.empty {
+    color: var(--muted);
+    text-align: center;
+    padding: 2rem;
+  }
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+  align-items: start;
+
+  > .card {
+    margin-bottom: 0;
+  }
+
+  margin-bottom: 1rem;
+}
+
+// ---------- buttons ----------
+button,
+.button {
+  display: inline-block;
+  font: inherit;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover:not(:disabled) {
+    background: var(--primary-hover);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  &.secondary {
+    background: #fff;
+    color: var(--primary);
+
+    &:hover:not(:disabled) {
+      background: #eef4fa;
+    }
+  }
+
+  &.danger {
+    background: var(--danger);
+    border-color: var(--danger);
+
+    &:hover:not(:disabled) {
+      background: #8f1c13;
+    }
+  }
+
+  &.small {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  &.link {
+    background: none;
+    border: none;
+    color: inherit;
+    padding: 0 0.25rem;
+  }
+}
+
+// ---------- tables ----------
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+
+  th,
+  td {
+    text-align: left;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  th {
+    background: #eef1f4;
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  td.num,
+  th.num {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  tr.sub td {
+    background: #fafbfc;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+// ---------- forms ----------
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 640px;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-weight: 600;
+  }
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  font-weight: normal;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  width: 100%;
+
+  &.ng-invalid.ng-touched {
+    border-color: var(--danger);
+  }
+}
+
+.input-with-suffix {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  .suffix {
+    font-weight: 600;
+    min-width: 3em;
+  }
+}
+
+.hint {
+  font-weight: normal;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.field-error {
+  font-weight: normal;
+  font-size: 0.85rem;
+  color: var(--danger);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.85rem;
+    color: var(--muted);
+    gap: 0.2rem;
+  }
+
+  select {
+    width: auto;
+    min-width: 9rem;
+  }
+}
+
+// ---------- status badges ----------
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-submitted {
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+
+.badge-under_review {
+  background: #fff3e0;
+  color: #9a4d00;
+}
+
+.badge-info_requested {
+  background: #f3e5f5;
+  color: #6a1b9a;
+}
+
+.badge-approved {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.badge-settled {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.badge-rejected {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+// ---------- error banner ----------
+.error-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid #f5c2bd;
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+
+  ul {
+    margin: 0.35rem 0 0;
+    padding-left: 1.2rem;
+  }
+}
+
+// ---------- claim detail pieces ----------
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0;
+
+  dt {
+    color: var(--muted);
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--border);
+
+  li {
+    position: relative;
+    padding: 0 0 0.9rem 0.75rem;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: -1.4rem;
+      top: 0.45rem;
+      width: 0.6rem;
+      height: 0.6rem;
+      border-radius: 50%;
+      background: var(--primary);
+    }
+  }
+}
+
+.info-request {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  .pending {
+    color: #6a1b9a;
+    font-style: italic;
+  }
+}
+
+.notification {
+  margin-bottom: 0.5rem;
+}
+
+// ---------- login ----------
+.user-choice {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  background: #fff;
+  color: var(--text);
+  border-color: var(--border);
+
+  &:hover:not(:disabled) {
+    background: #eef4fa;
+    border-color: var(--primary);
+  }
+}
+
+// ---------- dashboard ----------
+.note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: #eef4fa;
+  border-radius: var(--radius);
+  padding: 0.4rem 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.stats {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.6rem 1rem;
+    min-width: 11rem;
+
+    .value {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+  }
+}
