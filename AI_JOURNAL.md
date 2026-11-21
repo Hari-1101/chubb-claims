@@ -191,3 +191,52 @@ Noticed 2 problems to fix later:
   The test data thing was buried at the bottom of its summary and I almost
   scrolled past it. If I hadn't read that far, my demo dashboard would've
   shown random test claims and I wouldn't have known why.
+
+  ### 18:35 Step 5: Angular frontend
+Claude Code built the Angular app: demo login, claimant screens (my claims,
+new claim, claim detail, notifications) and staff screens (work queue, claim
+detail with actions, dashboard). 11 tests pass. No backend changes.
+
+It told me straight that it only tested through API calls, not by clicking
+the screens. So I decided to click through the whole flow myself before
+moving on.
+
+Things I noted:
+- The rules for which buttons to show are copied into the frontend. Accepted:
+  it's just so users don't see buttons that won't work. The backend still
+  blocks anything invalid, so it's the real source of truth.
+- Demo users are hard-coded in the frontend and copied from the seed data.
+  Fine for a demo. A real system would get users from a proper login.
+- Dashboard refreshes every 10 seconds and shows "last updated", because
+  reports come from Kafka events and can be a moment behind.
+- Not built: read/unread notifications, sorting in the queue, reserve history
+  screen. Not important enough for the time I have.
+
+### 18:50 Testing the UI myself: found a real bug
+Started clicking through as C001 then S001. Submitting, assigning and
+changing the reserve all worked. Then I used "Request information" as staff
+and nothing happened. No error, status stayed "Under review", no question
+saved. Tried again, same thing.
+
+Gave Claude Code the exact steps to reproduce. Root cause: 4 forms (request
+info, approve, reject, claimant answer) used an Angular submit event that only
+works when the form is set up a certain way. They weren't, so clicking submit
+just reloaded the page and no request was ever sent. That's why there was no
+error either.
+
+It wrote tests that failed on the old code first (proving the bug), then fixed
+it and checked the other forms too. 16 frontend tests now.
+
+[Challenged the fix: it used a workaround (preventDefault) on 4 forms while
+the other 2 forms use proper Angular reactive forms. Asked it to make them
+all the same pattern so it's consistent and easier to explain.]
+
+Re-tested the whole flow in the browser after the fix with a new claim
+(Test 1–7): submit, assign, change reserve, request info, claimant answer,
+wrong officer blocked, error banner, approve, settle, dashboard, timeline and
+notifications. All worked.
+
+- My take: Probably the most useful thing I did today. "All tests pass" didn't
+  mean the app worked. The tests just never clicked the button. If I hadn't
+  tested it myself I would've found this live in front of the panel. Lesson:
+  don't accept "done" until I've actually used the feature myself.
