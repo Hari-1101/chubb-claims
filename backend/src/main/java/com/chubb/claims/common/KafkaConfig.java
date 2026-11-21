@@ -3,6 +3,7 @@ package com.chubb.claims.common;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.DefaultKafkaConsumerFactoryCustomizer;
 import org.springframework.boot.autoconfigure.kafka.DefaultKafkaProducerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -15,16 +16,16 @@ import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
 /**
- * Kafka setup: the claims.events topic and JSON (de)serialisation of {@link ClaimEvent} using the application's
+ * Kafka setup: the claim events topic (property claims.events.topic) and JSON (de)serialisation of {@link ClaimEvent} using the application's
  * ObjectMapper (so timestamps are ISO-8601 strings, same as the REST API). Keys are plain strings (Boot default).
  */
 @Configuration
 public class KafkaConfig {
 
     @Bean
-    public NewTopic claimEventsTopic() {
+    public NewTopic claimEventsTopic(@Value("${claims.events.topic}") String topic) {
         // 3 partitions; the key (claimNumber) keeps all events of one claim on one partition, in order.
-        return TopicBuilder.name(ClaimEvent.TOPIC).partitions(3).replicas(1).build();
+        return TopicBuilder.name(topic).partitions(3).replicas(1).build();
     }
 
     @Bean

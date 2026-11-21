@@ -4,6 +4,7 @@ import com.chubb.claims.common.ClaimEvent;
 import com.chubb.claims.common.ClaimEventType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -30,12 +31,15 @@ public class ClaimEventPublisher {
     private final ApplicationEventPublisher applicationEvents;
     private final ClaimRepository claimRepository;
     private final KafkaTemplate<String, ClaimEvent> kafkaTemplate;
+    private final String topic;
 
     public ClaimEventPublisher(ApplicationEventPublisher applicationEvents, ClaimRepository claimRepository,
-                               KafkaTemplate<String, ClaimEvent> kafkaTemplate) {
+                               KafkaTemplate<String, ClaimEvent> kafkaTemplate,
+                               @Value("${claims.events.topic}") String topic) {
         this.applicationEvents = applicationEvents;
         this.claimRepository = claimRepository;
         this.kafkaTemplate = kafkaTemplate;
+        this.topic = topic;
     }
 
     /** Call inside the service transaction, after the domain change. */
@@ -48,7 +52,7 @@ public class ClaimEventPublisher {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void sendAfterCommit(ClaimEvent event) {
         try {
-            kafkaTemplate.send(ClaimEvent.TOPIC, event.claimNumber(), event).whenComplete((result, error) -> {
+            kafkaTemplate.send(topic, event.claimNumber(), event).whenComplete((result, error) -> {
                 if (error != null) {
                     logLostEvent(event, error);
                 } else {

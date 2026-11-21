@@ -29,17 +29,17 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
 - We publish after commit for simplicity; the transactional outbox is the production approach (documented, not built).
 
 ## Events (as built)
-- Topic `claims.events` (3 partitions), key = claimNumber, JSON value = `common.ClaimEvent`
+- Topic `claims.events` (property `claims.events.topic`; 3 partitions), key = claimNumber, JSON value = `common.ClaimEvent`
   (envelope + claim snapshot incl. `claimVersion`). Types: ClaimSubmitted, ClaimAssigned, InformationRequested,
   InformationResponded, ReserveChanged, ClaimApproved, ClaimRejected, ClaimSettled.
 - Services call `ClaimEventPublisher.publish(claim, type)` inside the transaction; it is sent to Kafka from an
   `@TransactionalEventListener(AFTER_COMMIT)`. Send failures are logged as `EVENT LOST`.
-- Consumer groups: `claims-notification`, `claims-reporting`. Each consumer calls
+- Consumer groups: `claims-notification`, `claims-reporting` (+ `claims.events.group-suffix`). Each consumer calls
   `ProcessedEventStore.markProcessed(eventId, group)` in the same transaction as its work and skips if false.
 - `reporting` builds `reporting_claim` from events only and MUST NOT query the claim tables; it ignores snapshots
   with `claimVersion <= lastClaimVersion`. Reports never sum across currencies and include `lastUpdated`.
 - Tests: Awaitility (test scope) for async assertions. `EventFlowIntegrationTest` needs Kafka + Postgres running and
-  is not transactional (it leaves its claims in the dev DB).
+  is not transactional (it leaves its claims in the `claims_test` database).
 
 ## API contract
 - Backend publishes an OpenAPI spec via springdoc (`/v3/api-docs`, UI at `/swagger-ui.html`). The frontend is built against it.
@@ -128,6 +128,9 @@ SG, MY, HK, TH, ID, AU — each with its own currency.
 - JUnit 5 + Mockito (from spring-boot-starter-test). No extra test libraries without asking.
 - Domain rules are tested with plain unit tests (no Spring context, no Docker). `ClaimsApplicationTests` needs
   `docker compose up -d` and proves migrations + entity mappings line up.
+- Every `@SpringBootTest` MUST use `@ActiveProfiles("test")` (`src/test/resources/application-test.yml`):
+  database `claims_test` (created by `docker/postgres/create-test-db.sql` on a fresh volume), topic
+  `claims.events.test`, groups `*.test`. Integration tests never touch the dev/demo database or topic.
 
 ## Out of scope
 Real auth/SSO, document uploads, payments, fraud checks, email delivery, caching, multi-tenancy, deployment.

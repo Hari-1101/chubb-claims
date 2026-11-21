@@ -1,0 +1,11 @@
+# Profile "test": used by every @SpringBootTest (@ActiveProfiles("test")).
+# Integration tests get their own database, topic and consumer groups, so they never write into the dev/demo
+# database and a running dev app never consumes test events (and vice versa).
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/claims_test}   # created by docker/postgres/create-test-db.sql
+
+claims:
+  events:
+    topic: claims.events.test
+    group-suffix: .test    # claims-notification.test, claims-reporting.test

@@ -34,6 +34,9 @@ spring:
       auto-offset-reset: earliest   # a new consumer group starts from the beginning of the topic
 
 claims:
+  events:
+    topic: claims.events   # integration tests use claims.events.test (application-test.yml)
+    group-suffix: ""      # appended to the consumer group names (claims-notification, claims-reporting)
   cors:
     allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:4200}   # Angular dev server
 

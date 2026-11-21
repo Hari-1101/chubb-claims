@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,9 +35,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * End-to-end through real Kafka and Postgres (docker compose must be up): API → commit → Kafka → consumers.
- * NOT transactional: events are only sent after a real commit, so this test leaves its claims in the dev database.
+ * NOT transactional: events are only sent after a real commit, so this test leaves its claims in the
+ * claims_test database (profile "test"), never in the dev/demo database.
  */
 @SpringBootTest
+@ActiveProfiles("test") // claims_test database, claims.events.test topic (application-test.yml)
 @AutoConfigureMockMvc
 class EventFlowIntegrationTest {
 

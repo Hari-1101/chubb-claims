@@ -14,7 +14,9 @@ class ReportingEventListener {
         this.projection = projection;
     }
 
-    @KafkaListener(topics = ClaimEvent.TOPIC, groupId = ReportingProjection.CONSUMER_GROUP)
+    // Topic and group suffix come from properties, so integration tests (profile "test") use their own topic and groups.
+    @KafkaListener(topics = "${claims.events.topic}",
+            groupId = ReportingProjection.CONSUMER_GROUP + "${claims.events.group-suffix:}")
     void on(ClaimEvent event) {
         projection.handle(event);
     }

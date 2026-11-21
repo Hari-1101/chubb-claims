@@ -5,7 +5,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * A claim domain event as sent to Kafka (topic {@value #TOPIC}, key = claimNumber, JSON value).
+ * A claim domain event as sent to Kafka (topic from property {@code claims.events.topic}, default "claims.events";
+ * key = claimNumber, JSON value).
  * It is the contract between the claim module (publisher) and the notification/reporting modules (consumers),
  * which is why it lives in {@code common} and uses plain strings for status and type.
  * <p>
@@ -31,5 +32,4 @@ public record ClaimEvent(
         String claimantId,
         Instant submittedAt) {
 
-    public static final String TOPIC = "claims.events";
 }

@@ -14,7 +14,9 @@ class NotificationEventListener {
         this.notificationService = notificationService;
     }
 
-    @KafkaListener(topics = ClaimEvent.TOPIC, groupId = NotificationService.CONSUMER_GROUP)
+    // Topic and group suffix come from properties, so integration tests (profile "test") use their own topic and groups.
+    @KafkaListener(topics = "${claims.events.topic}",
+            groupId = NotificationService.CONSUMER_GROUP + "${claims.events.group-suffix:}")
     void on(ClaimEvent event) {
         notificationService.handle(event);
     }
