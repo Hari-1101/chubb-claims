@@ -87,3 +87,37 @@ linked to policies, so no way to know whose claims are whose.
   pointed out: if the system can't tell whose claim is whose, a claimant
   could see other people's claims. Lesson: check that every user action can
   be traced back in the data model before building.
+
+### 17:20 Step 2: domain model + status rules
+Claude Code built the database schema (V1), seed data (V2), the entities and
+the claim status rules. 23 tests pass, and it made two commits like I asked.
+
+Checked myself:
+- Opened ClaimStatus. The allowed transitions match the lifecycle I planned
+  (SUBMITTED → UNDER_REVIEW → INFO_REQUESTED/APPROVED/REJECTED → SETTLED).
+- The transition rules are in one place (ClaimStatus), not spread around,
+  which was what I wanted so they're easy to test and explain.
+- Tests cover every allowed and blocked move, plus the final states.
+
+It came back with 3 questions:
+- **Estimate above coverage limit got rejected.** Two of our own rules
+  clashed (reserve = estimate, reserve can't exceed the limit).
+  **Overrode:** accept the claim and cap the reserve at the limit instead.
+  The estimate is the customer's guess at the damage, the reserve is what
+  Chubb expects to pay. Rejecting a claim because someone guessed high would
+  be bad service.
+- **It added time zones to Market without me asking.** Accepted. "Incident
+  can't be in the future" depends on what "today" is. A same-day claim in
+  Sydney could get rejected because the server's date is still yesterday.
+  Good catch.
+- **One shared claim number sequence for all markets.** Accepted. Still
+  unique and readable, and per-market counters add complexity I don't need
+  right now. Could change it in production if the business wants it.
+
+Other things it added on its own (extra indexes, a BusinessRuleException,
+text length limits). Read through them; they made sense, so I kept them.
+
+- My take: Didn't expect our own rules to contradict each other. Good reminder
+  that the AI should flag things instead of silently picking one, and that I
+  should read its "decisions for you" section carefully, not just skim the
+  summary.
