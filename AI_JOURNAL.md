@@ -121,3 +121,37 @@ text length limits). Read through them; they made sense, so I kept them.
   that the AI should flag things instead of silently picking one, and that I
   should read its "decisions for you" section carefully, not just skim the
   summary.
+
+  ### 17:50 Step 3: REST API
+Claude Code built the claimant and staff endpoints, fake header login, error
+handling and Swagger. 45 tests pass. It also tested against the real running
+app, not just the tests.
+
+[Tried the happy path myself in Swagger: submit as C001, assign as S001,
+request info, respond, approve, settle. Also tried approving as S002 → 403.]
+
+It asked 4 questions:
+- **Reserve change reason wasn't saved anywhere.** Decided to store it in a
+  table and send a Kafka event. The reserve is what exposure is based on, so
+  every change needs who/when/why. That's an audit thing in insurance.
+- **Claimants could see the reserve.** Hid it. It's Chubb's internal number
+  and showing it could affect negotiations with the claimant.
+- **API didn't allow reserve = 0.** Changed to allow 0. Expecting to pay
+  nothing is a valid case, and the API should match the domain rule.
+- **Swagger header fields on every call.** Switched to the Authorize button.
+  Easier for testing and the demo.
+
+Also changed: work queue now shows only open claims by default. Closed claims
+don't belong in a to-do list. Spotted this in its assumptions list.
+
+Rules it added on its own (must assign before acting, reserve only changes on
+open claims, 409 if already assigned). Read them, all made sense, kept them.
+
+- My take: The code itself worked well, but the 4 questions it raised were
+  things I hadn't thought about, especially hiding the reserve from claimants.
+  I only knew to hide it after thinking about how insurance works, not from
+  the code. That's where my judgment matters most: the AI can build the
+  endpoints, but deciding what a claimant should and shouldn't see is a
+  business decision. I'm also learning to read the "assumptions" section
+  properly. The open-only queue default was hidden in there, and I'd have
+  missed it if I'd just skimmed.
