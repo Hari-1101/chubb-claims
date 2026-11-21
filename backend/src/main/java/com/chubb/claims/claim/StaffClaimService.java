@@ -1,5 +1,6 @@
 package com.chubb.claims.claim;
 
+import com.chubb.claims.common.ClaimEventType;
 import com.chubb.claims.common.CurrentUser;
 import com.chubb.claims.common.ForbiddenException;
 import com.chubb.claims.common.Market;
@@ -14,6 +15,7 @@ import java.math.BigDecimal;
 /**
  * Claims-staff use cases. Access rule: once a claim is assigned, only the assigned officer can act on it.
  * Whether a status change is allowed is decided by the domain ({@link Claim} / {@link ClaimStatus}), not here.
+ * Every change publishes a claim event (sent to Kafka after commit).
  */
 @Service
 @Transactional
@@ -24,10 +26,13 @@ public class StaffClaimService {
 
     private final ClaimRepository claimRepository;
     private final InformationRequestRepository informationRequestRepository;
+    private final ClaimEventPublisher eventPublisher;
 
-    public StaffClaimService(ClaimRepository claimRepository, InformationRequestRepository informationRequestRepository) {
+    public StaffClaimService(ClaimRepository claimRepository, InformationRequestRepository informationRequestRepository,
+                             ClaimEventPublisher eventPublisher) {
         this.claimRepository = claimRepository;
         this.informationRequestRepository = informationRequestRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -42,37 +47,37 @@ public class StaffClaimService {
     public ClaimDetailResponse assignToMe(CurrentUser user, String claimNumber) {
         Claim claim = findClaim(claimNumber);
         claim.assignTo(user.id());
-        return toDetail(claim);
+        return changed(claim, ClaimEventType.ClaimAssigned);
     }
 
     public ClaimDetailResponse requestInformation(CurrentUser user, String claimNumber, String question) {
         Claim claim = findClaimAssignedTo(user, claimNumber);
         informationRequestRepository.save(claim.requestInformation(question, user.id()));
-        return toDetail(claim);
+        return changed(claim, ClaimEventType.InformationRequested);
     }
 
     public ClaimDetailResponse changeReserve(CurrentUser user, String claimNumber, BigDecimal amount, String reason) {
         Claim claim = findClaimAssignedTo(user, claimNumber);
         claim.changeReserve(amount, user.id(), reason);
-        return toDetail(claim);
+        return changed(claim, ClaimEventType.ReserveChanged);
     }
 
     public ClaimDetailResponse approve(CurrentUser user, String claimNumber, String reason) {
         Claim claim = findClaimAssignedTo(user, claimNumber);
         claim.transitionTo(ClaimStatus.APPROVED, user.id(), reason == null || reason.isBlank() ? "Approved" : reason);
-        return toDetail(claim);
+        return changed(claim, ClaimEventType.ClaimApproved);
     }
 
     public ClaimDetailResponse reject(CurrentUser user, String claimNumber, String reason) {
         Claim claim = findClaimAssignedTo(user, claimNumber);
         claim.transitionTo(ClaimStatus.REJECTED, user.id(), reason);
-        return toDetail(claim);
+        return changed(claim, ClaimEventType.ClaimRejected);
     }
 
     public ClaimDetailResponse settle(CurrentUser user, String claimNumber) {
         Claim claim = findClaimAssignedTo(user, claimNumber);
         claim.transitionTo(ClaimStatus.SETTLED, user.id(), "Settled");
-        return toDetail(claim);
+        return changed(claim, ClaimEventType.ClaimSettled);
     }
 
     private Claim findClaim(String claimNumber) {
@@ -92,7 +97,9 @@ public class StaffClaimService {
         return claim;
     }
 
-    private ClaimDetailResponse toDetail(Claim claim) {
+    /** Publishes the event for a successful change and returns the staff view of the claim. */
+    private ClaimDetailResponse changed(Claim claim, ClaimEventType eventType) {
+        eventPublisher.publish(claim, eventType);
         return ClaimMapper.toDetail(claim, informationRequestRepository.findByClaimOrderByRequestedAtAscIdAsc(claim), true);
     }
 }

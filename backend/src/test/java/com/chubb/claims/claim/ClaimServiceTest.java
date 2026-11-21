@@ -1,5 +1,6 @@
 package com.chubb.claims.claim;
 
+import com.chubb.claims.common.ClaimEventType;
 import com.chubb.claims.common.ForbiddenException;
 import com.chubb.claims.common.Market;
 import com.chubb.claims.common.NotFoundException;
@@ -16,6 +17,7 @@ import static com.chubb.claims.claim.TestData.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -29,6 +31,7 @@ class ClaimServiceTest {
     @Mock PolicyRepository policyRepository;
     @Mock InformationRequestRepository informationRequestRepository;
     @Mock ClaimNumberGenerator claimNumberGenerator;
+    @Mock ClaimEventPublisher eventPublisher;
     @InjectMocks ClaimService service;
 
     private static SubmitClaimRequest submitRequest(String policyNumber) {
@@ -45,6 +48,7 @@ class ClaimServiceTest {
         assertEquals("CLM-SG-2026-000001", result.claimNumber());
         assertEquals(ClaimStatus.SUBMITTED, result.status());
         verify(claimRepository).save(any(Claim.class));
+        verify(eventPublisher).publish(any(Claim.class), eq(ClaimEventType.ClaimSubmitted));
     }
 
     @Test
@@ -54,7 +58,7 @@ class ClaimServiceTest {
         assertThrows(ForbiddenException.class, () -> service.submit(ALICE_USER, submitRequest("POL-B")));
 
         verify(claimRepository, never()).save(any());
-        verifyNoInteractions(claimNumberGenerator);
+        verifyNoInteractions(claimNumberGenerator, eventPublisher);
     }
 
     @Test
@@ -99,6 +103,6 @@ class ClaimServiceTest {
 
         assertEquals(ClaimStatus.INFO_REQUESTED, bobsClaim.getStatus());
         assertEquals(true, request.isOpen());
-        verifyNoInteractions(informationRequestRepository);
+        verifyNoInteractions(informationRequestRepository, eventPublisher);
     }
 }

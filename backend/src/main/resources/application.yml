@@ -26,6 +26,12 @@ spring:
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    # Value (de)serialisers for ClaimEvent are set in KafkaConfig (JSON); keys are plain strings.
+    producer:
+      properties:
+        max.block.ms: 5000   # if Kafka is down, fail fast (and log) instead of blocking the HTTP request for 60s
+    consumer:
+      auto-offset-reset: earliest   # a new consumer group starts from the beginning of the topic
 
 claims:
   cors:

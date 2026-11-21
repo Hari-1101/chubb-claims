@@ -1,5 +1,6 @@
 package com.chubb.claims.claim;
 
+import com.chubb.claims.common.ClaimEventType;
 import com.chubb.claims.common.CurrentUser;
 import com.chubb.claims.common.ForbiddenException;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** Access rules for staff use cases: only the assigned officer can act (Mockito, no database). */
@@ -28,6 +30,7 @@ class StaffClaimServiceTest {
 
     @Mock ClaimRepository claimRepository;
     @Mock InformationRequestRepository informationRequestRepository;
+    @Mock ClaimEventPublisher eventPublisher;
     @InjectMocks StaffClaimService service;
 
     /** Every action that requires the caller to be the assigned officer. */
@@ -71,6 +74,7 @@ class StaffClaimServiceTest {
             assertEquals(reserveBefore, claim.getReserveAmount(), name + ": reserve unchanged");
         });
         verify(informationRequestRepository, never()).save(any());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -82,6 +86,7 @@ class StaffClaimServiceTest {
             assertThrows(ForbiddenException.class, () -> action.accept(OFFICER_1, "CLM-A"), name);
             assertEquals(ClaimStatus.SUBMITTED, claim.getStatus(), name + ": status unchanged");
         });
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -95,6 +100,7 @@ class StaffClaimServiceTest {
         assertEquals("S001", last.changedBy());
         assertEquals("Covered under section 2", last.reason());
         assertEquals(ClaimStatus.APPROVED, claim.getStatus());
+        verify(eventPublisher).publish(claim, ClaimEventType.ClaimApproved);
     }
 
     @Test

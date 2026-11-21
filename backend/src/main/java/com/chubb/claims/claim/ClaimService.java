@@ -1,5 +1,6 @@
 package com.chubb.claims.claim;
 
+import com.chubb.claims.common.ClaimEventType;
 import com.chubb.claims.common.CurrentUser;
 import com.chubb.claims.common.ForbiddenException;
 import com.chubb.claims.common.NotFoundException;
@@ -11,6 +12,7 @@ import java.util.List;
 /**
  * Claimant use cases, plus the claim detail view shared with staff.
  * Access rules: a claimant only works with their own policies and claims.
+ * Every change publishes a claim event (sent to Kafka after commit).
  */
 @Service
 @Transactional
@@ -20,14 +22,16 @@ public class ClaimService {
     private final PolicyRepository policyRepository;
     private final InformationRequestRepository informationRequestRepository;
     private final ClaimNumberGenerator claimNumberGenerator;
+    private final ClaimEventPublisher eventPublisher;
 
     public ClaimService(ClaimRepository claimRepository, PolicyRepository policyRepository,
                         InformationRequestRepository informationRequestRepository,
-                        ClaimNumberGenerator claimNumberGenerator) {
+                        ClaimNumberGenerator claimNumberGenerator, ClaimEventPublisher eventPublisher) {
         this.claimRepository = claimRepository;
         this.policyRepository = policyRepository;
         this.informationRequestRepository = informationRequestRepository;
         this.claimNumberGenerator = claimNumberGenerator;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -47,6 +51,7 @@ public class ClaimService {
         Claim claim = Claim.submit(claimNumberGenerator.next(policy.getMarket()), policy, request.incidentDate(),
                 request.description(), request.estimatedAmount(), user.id());
         claimRepository.save(claim);
+        eventPublisher.publish(claim, ClaimEventType.ClaimSubmitted);
         return ClaimMapper.toDetail(claim, List.of(), user.isStaff());
     }
 
@@ -71,6 +76,7 @@ public class ClaimService {
                 .orElseThrow(() -> new NotFoundException(
                         "Information request " + requestId + " not found on claim " + claimNumber));
         claim.respondToInformationRequest(request, response, user.id());
+        eventPublisher.publish(claim, ClaimEventType.InformationResponded);
         return toDetail(user, claim);
     }
 
