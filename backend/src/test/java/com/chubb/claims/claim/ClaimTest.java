@@ -139,23 +139,47 @@ class ClaimTest {
         @Test
         void reserveCanBeChangedWithinLimits() {
             Claim claim = newClaim();
-            claim.changeReserve(new BigDecimal("0.00"));
+            claim.changeReserve(new BigDecimal("0.00"), OFFICER_ID, "re-estimate");
             assertEquals(new BigDecimal("0.00"), claim.getReserveAmount());
-            claim.changeReserve(new BigDecimal("150000.00"));
+            claim.changeReserve(new BigDecimal("150000.00"), OFFICER_ID, "re-estimate");
             assertEquals(new BigDecimal("150000.00"), claim.getReserveAmount());
+        }
+
+        @Test
+        void reserveChangeIsAudited() {
+            Claim claim = newClaim();
+            claim.changeReserve(new BigDecimal("9000.00"), OFFICER_ID, "Assessor report");
+
+            assertEquals(1, claim.getReserveChanges().size());
+            ReserveChange change = claim.getReserveChanges().get(0);
+            assertEquals(new BigDecimal("12000.00"), change.getOldAmount());
+            assertEquals(new BigDecimal("9000.00"), change.getNewAmount());
+            assertEquals(OFFICER_ID, change.getChangedBy());
+            assertEquals("Assessor report", change.getReason());
+            assertNotNull(change.getChangedAt());
+        }
+
+        @Test
+        void rejectedReserveChangeIsNotAudited() {
+            Claim claim = newClaim();
+            assertThrows(BusinessRuleException.class,
+                    () -> claim.changeReserve(new BigDecimal("150000.01"), OFFICER_ID, "too much"));
+            assertThrows(BusinessRuleException.class,
+                    () -> claim.changeReserve(new BigDecimal("100.00"), OFFICER_ID, " "));
+            assertTrue(claim.getReserveChanges().isEmpty());
         }
 
         @Test
         void negativeReserveIsRejected() {
             Claim claim = newClaim();
-            assertThrows(BusinessRuleException.class, () -> claim.changeReserve(new BigDecimal("-0.01")));
+            assertThrows(BusinessRuleException.class, () -> claim.changeReserve(new BigDecimal("-0.01"), OFFICER_ID, "re-estimate"));
             assertEquals(new BigDecimal("12000.00"), claim.getReserveAmount(), "reserve unchanged");
         }
 
         @Test
         void reserveAboveCoverageLimitIsRejected() {
             Claim claim = newClaim();
-            assertThrows(BusinessRuleException.class, () -> claim.changeReserve(new BigDecimal("150000.01")));
+            assertThrows(BusinessRuleException.class, () -> claim.changeReserve(new BigDecimal("150000.01"), OFFICER_ID, "re-estimate"));
             assertEquals(new BigDecimal("12000.00"), claim.getReserveAmount(), "reserve unchanged");
         }
 
@@ -163,7 +187,7 @@ class ClaimTest {
         void reserveOfAClosedClaimCannotBeChanged() {
             for (ClaimStatus finalStatus : List.of(SETTLED, REJECTED)) {
                 Claim claim = claimIn(finalStatus);
-                assertThrows(BusinessRuleException.class, () -> claim.changeReserve(new BigDecimal("100.00")));
+                assertThrows(BusinessRuleException.class, () -> claim.changeReserve(new BigDecimal("100.00"), OFFICER_ID, "re-estimate"));
             }
         }
     }

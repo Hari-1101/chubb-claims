@@ -31,7 +31,8 @@ public class StaffClaimController {
     }
 
     @GetMapping
-    @Operation(summary = "Work queue, oldest first", description = "All filters are optional.")
+    @Operation(summary = "Work queue, oldest first",
+            description = "All filters are optional. Without a status filter only open claims are shown.")
     public PageResponse<ClaimSummaryResponse> queue(
             CurrentUser user,
             @RequestParam(required = false) ClaimStatus status,

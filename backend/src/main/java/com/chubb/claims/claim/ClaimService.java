@@ -47,20 +47,20 @@ public class ClaimService {
         Claim claim = Claim.submit(claimNumberGenerator.next(policy.getMarket()), policy, request.incidentDate(),
                 request.description(), request.estimatedAmount(), user.id());
         claimRepository.save(claim);
-        return ClaimMapper.toDetail(claim, List.of());
+        return ClaimMapper.toDetail(claim, List.of(), user.isStaff());
     }
 
     @Transactional(readOnly = true)
     public List<ClaimSummaryResponse> myClaims(CurrentUser user) {
         return claimRepository.findByPolicyHolderIdOrderByCreatedAtDescIdDesc(user.id()).stream()
-                .map(ClaimMapper::toSummary)
+                .map(claim -> ClaimMapper.toSummary(claim, user.isStaff()))
                 .toList();
     }
 
     /** Staff see any claim; claimants only their own (others look like 404 so we don't reveal they exist). */
     @Transactional(readOnly = true)
     public ClaimDetailResponse getClaim(CurrentUser user, String claimNumber) {
-        return toDetail(findVisibleClaim(user, claimNumber));
+        return toDetail(user, findVisibleClaim(user, claimNumber));
     }
 
     /** The claimant answers an open information request; the claim goes back to UNDER_REVIEW. */
@@ -71,7 +71,7 @@ public class ClaimService {
                 .orElseThrow(() -> new NotFoundException(
                         "Information request " + requestId + " not found on claim " + claimNumber));
         claim.respondToInformationRequest(request, response, user.id());
-        return toDetail(claim);
+        return toDetail(user, claim);
     }
 
     private Claim findVisibleClaim(CurrentUser user, String claimNumber) {
@@ -83,8 +83,10 @@ public class ClaimService {
         return claim;
     }
 
-    private ClaimDetailResponse toDetail(Claim claim) {
-        return ClaimMapper.toDetail(claim, informationRequestRepository.findByClaimOrderByRequestedAtAscIdAsc(claim));
+    /** Reserve amounts are internal: only staff see them. */
+    private ClaimDetailResponse toDetail(CurrentUser user, Claim claim) {
+        return ClaimMapper.toDetail(claim, informationRequestRepository.findByClaimOrderByRequestedAtAscIdAsc(claim),
+                user.isStaff());
     }
 
     private static NotFoundException claimNotFound(String claimNumber) {

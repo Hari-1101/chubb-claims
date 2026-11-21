@@ -97,10 +97,10 @@ The frontend is built against this spec, so the backend is the single source of 
 | GET  | `/api/claims/mine` | CLAIMANT | My claims, newest first |
 | GET  | `/api/claims/{claimNumber}` | CLAIMANT, STAFF | Detail + status history + information requests (claimants: own only, else 404) |
 | POST | `/api/claims/{claimNumber}/information-requests/{requestId}/response` | CLAIMANT | Answer → UNDER_REVIEW |
-| GET  | `/api/staff/claims?status&market&type&assigned=me\|unassigned\|any&page&size` | STAFF | Work queue, oldest first, paginated |
+| GET  | `/api/staff/claims?status&market&type&assigned=me\|unassigned\|any&page&size` | STAFF | Work queue, oldest first, paginated; open claims only unless a status is given |
 | POST | `/api/staff/claims/{claimNumber}/assign` | STAFF | Assign to me → UNDER_REVIEW |
 | POST | `/api/staff/claims/{claimNumber}/information-requests` | STAFF | Ask the claimant → INFO_REQUESTED |
-| PUT  | `/api/staff/claims/{claimNumber}/reserve` | STAFF | Change reserve (0 < amount ≤ coverage limit) |
+| PUT  | `/api/staff/claims/{claimNumber}/reserve` | STAFF | Change reserve (0 ≤ amount ≤ coverage limit, reason required, audited) |
 | POST | `/api/staff/claims/{claimNumber}/approve` | STAFF | → APPROVED (reason optional) |
 | POST | `/api/staff/claims/{claimNumber}/reject` | STAFF | → REJECTED (reason required) |
 | POST | `/api/staff/claims/{claimNumber}/settle` | STAFF | → SETTLED |
@@ -110,6 +110,12 @@ The frontend is built against this spec, so the backend is the single source of 
 `Controller` (validate input, return DTO) → `Service` (`@Transactional`: load, check access, call the domain,
 map to DTO) → `Claim` / `ClaimStatus` (business rules) → `Repository`. DTOs are records; entities never leave
 the service layer. Mapping happens inside the transaction because open-in-view is off.
+
+`reserveAmount` is an internal liability figure: it is omitted from every response sent to a claimant and shown
+to staff. (One DTO with the field left out for claimants, rather than two parallel DTO sets.)
+
+Swagger UI: click **Authorize** and enter `X-User-Id` and `X-User-Role` once; they are sent with every call and
+kept across page reloads.
 
 ### Errors (RFC 7807 ProblemDetail)
 
@@ -140,6 +146,7 @@ consumer, which we already have) is the production option.
 | `Claim`              | claimNumber, policy, type, market, currency, incidentDate, description, estimatedAmount, reserveAmount, status, assignedOfficerId, createdAt, updatedAt, version | `version` = optimistic lock, so two officers can't silently overwrite each other. |
 | `ClaimStatusHistory` | claim, fromStatus, toStatus, changedBy, reason, changedAt | Audit trail: one row per transition, plus an initial row (from = null → SUBMITTED). |
 | `InformationRequest` | claim, question, response, requestedBy, requestedAt, respondedAt | Open while `response` is empty. |
+| `ReserveChange`      | claim, oldAmount, newAmount, changedBy, reason, changedAt | Audit trail of reserve changes (reason required). |
 | `Notification`       | claimId, recipientEmail, message, createdAt | Later step. Written by the `notification` consumer. |
 
 **Why one `AppUser` instead of a separate staff table?** The fake `X-User-Id` header has to map to a real user so

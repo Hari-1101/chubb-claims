@@ -30,7 +30,10 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
 
 ## API contract
 - Backend publishes an OpenAPI spec via springdoc (`/v3/api-docs`, UI at `/swagger-ui.html`). The frontend is built against it.
-- Swagger tags: "Claimant", "Staff". X-User-Id / X-User-Role are added to every operation (`OpenApiConfig`).
+- Swagger tags: "Claimant", "Staff", "Reports". X-User-Id / X-User-Role are API-key security schemes, so Swagger UI
+  has an "Authorize" button (`OpenApiConfig`).
+- `reserveAmount` is staff-only: omitted from responses to claimants.
+- Staff work queue without a status filter shows only open claims.
 
 ## API conventions
 - Controllers are thin: validate (Bean Validation), call a service, return a DTO. No business rules in controllers.
@@ -65,7 +68,8 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
   reserveAmount = min(estimatedAmount, policy coverageLimit); type, market and currency
   copied from the policy; an initial history row (from = null, to = SUBMITTED) is written.
 - incidentDate cannot be in the future ("today" = today in the claim's market time zone, see `Market`).
-- reserveAmount must be >= 0 and <= policy coverageLimit (`Claim.changeReserve`).
+- reserveAmount must be >= 0 and <= policy coverageLimit, only on open claims, with a reason
+  (`Claim.changeReserve`); every change is audited in `reserve_change`.
 - Claim number: `CLM-<MARKET>-<YEAR>-<6-digit seq>` from Postgres sequence `claim_number_seq` (`ClaimNumberGenerator`).
 - Rule violations throw `BusinessRuleException`; invalid status moves throw `InvalidStatusTransitionException`
   (both in `common`).

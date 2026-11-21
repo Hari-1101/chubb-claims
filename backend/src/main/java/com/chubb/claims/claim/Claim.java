@@ -29,7 +29,8 @@ import java.util.Objects;
 
 /**
  * A claim against a policy. All claim business rules live here:
- * creation rules ({@link #submit}), reserve limits ({@link #changeReserve}) and status changes ({@link #transitionTo}).
+ * creation rules ({@link #submit}), reserve limits and audit ({@link #changeReserve}) and status changes
+ * ({@link #transitionTo}).
  * Which status changes are allowed is defined by {@link ClaimStatus}.
  */
 @Entity
@@ -91,6 +92,10 @@ public class Claim {
     @OrderBy("changedAt ASC, id ASC")
     private List<ClaimStatusHistory> statusHistory = new ArrayList<>();
 
+    @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL)
+    @OrderBy("changedAt ASC, id ASC")
+    private List<ReserveChange> reserveChanges = new ArrayList<>();
+
     protected Claim() {
         // for JPA
     }
@@ -143,12 +148,21 @@ public class Claim {
         return claim;
     }
 
-    /** Changes the reserve of an open claim. It must be between zero and the policy's coverage limit. */
-    public void changeReserve(BigDecimal newReserve) {
+    /**
+     * Changes the reserve of an open claim and records who changed it and why.
+     * The new reserve must be between zero and the policy's coverage limit.
+     */
+    public void changeReserve(BigDecimal newReserve, String changedBy, String reason) {
+        Objects.requireNonNull(changedBy, "changedBy");
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessRuleException("A reason is required to change the reserve");
+        }
         if (!isOpen()) {
             throw new BusinessRuleException("Reserve of claim %s cannot be changed: it is %s".formatted(claimNumber, status));
         }
+        BigDecimal oldReserve = reserveAmount;
         setReserve(newReserve);
+        reserveChanges.add(new ReserveChange(this, oldReserve, newReserve, changedBy, reason, updatedAt));
     }
 
     /**
@@ -278,5 +292,9 @@ public class Claim {
 
     public List<ClaimStatusHistory> getStatusHistory() {
         return Collections.unmodifiableList(statusHistory);
+    }
+
+    public List<ReserveChange> getReserveChanges() {
+        return Collections.unmodifiableList(reserveChanges);
     }
 }

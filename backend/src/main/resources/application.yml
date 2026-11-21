@@ -34,6 +34,7 @@ claims:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+    persist-authorization: true   # keep the Authorize values across page reloads
   api-docs:
     path: /v3/api-docs
 

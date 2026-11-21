@@ -1,6 +1,8 @@
 package com.chubb.claims.claim;
 
 import com.chubb.claims.common.Market;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -17,6 +19,8 @@ public record ClaimDetailResponse(
         LocalDate incidentDate,
         String description,
         BigDecimal estimatedAmount,
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        @Schema(description = "Staff only; omitted for claimants")
         BigDecimal reserveAmount,
         ClaimStatus status,
         String assignedOfficerId,

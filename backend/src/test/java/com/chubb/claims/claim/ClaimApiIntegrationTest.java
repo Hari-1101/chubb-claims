@@ -14,8 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -70,7 +72,15 @@ class ClaimApiIntegrationTest {
         officer(post(staffUrl + "/assign"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UNDER_REVIEW"))
-                .andExpect(jsonPath("$.assignedOfficerId").value(OFFICER));
+                .andExpect(jsonPath("$.assignedOfficerId").value(OFFICER))
+                .andExpect(jsonPath("$.reserveAmount").value(8500.00));
+
+        officer(put(staffUrl + "/reserve").content("{\"amount\": 0, \"reason\": \"Third party insurer pays\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reserveAmount").value(0));
+        officer(put(staffUrl + "/reserve").content("{\"amount\": 7000.00, \"reason\": \"Assessor report\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reserveAmount").value(7000.00));
 
         officer(get("/api/staff/claims").param("assigned", "me").param("status", "UNDER_REVIEW").param("size", "100"))
                 .andExpect(status().isOk())
@@ -103,7 +113,19 @@ class ClaimApiIntegrationTest {
                         contains("SUBMITTED", "UNDER_REVIEW", "INFO_REQUESTED", "UNDER_REVIEW", "APPROVED", "SETTLED")))
                 .andExpect(jsonPath("$.statusHistory[*].changedBy",
                         contains(CLAIMANT, OFFICER, OFFICER, CLAIMANT, OFFICER, OFFICER)))
-                .andExpect(jsonPath("$.informationRequests[0].response").value("Police report SPF-2026-1234."));
+                .andExpect(jsonPath("$.informationRequests[0].response").value("Police report SPF-2026-1234."))
+                .andExpect(jsonPath("$.reserveAmount").doesNotExist());
+
+        claimant(get("/api/claims/mine"))
+                .andExpect(jsonPath("$[0].claimNumber").value(claimNumber))
+                .andExpect(jsonPath("$[0].reserveAmount").doesNotExist());
+
+        // Without a status filter the queue hides closed claims.
+        officer(get("/api/staff/claims").param("assigned", "me").param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[*].claimNumber", not(hasItem(claimNumber))));
+        officer(get("/api/staff/claims").param("assigned", "me").param("status", "SETTLED").param("size", "100"))
+                .andExpect(jsonPath("$.content[*].claimNumber", hasItem(claimNumber)));
     }
 
     @Test

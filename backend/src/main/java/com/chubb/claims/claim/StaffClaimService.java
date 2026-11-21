@@ -4,8 +4,6 @@ import com.chubb.claims.common.CurrentUser;
 import com.chubb.claims.common.ForbiddenException;
 import com.chubb.claims.common.Market;
 import com.chubb.claims.common.NotFoundException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -20,8 +18,6 @@ import java.math.BigDecimal;
 @Service
 @Transactional
 public class StaffClaimService {
-
-    private static final Logger log = LoggerFactory.getLogger(StaffClaimService.class);
 
     /** Oldest first so nothing waits too long; id breaks ties. */
     private static final Sort QUEUE_ORDER = Sort.by("createdAt").ascending().and(Sort.by("id").ascending());
@@ -39,7 +35,7 @@ public class StaffClaimService {
                                                     ProductType type, AssignmentFilter assigned, int page, int size) {
         var filters = ClaimQueueFilters.of(status, market, type, assigned, user.id());
         return PageResponse.of(claimRepository.findAll(filters, PageRequest.of(page, size, QUEUE_ORDER)),
-                ClaimMapper::toSummary);
+                claim -> ClaimMapper.toSummary(claim, true));
     }
 
     /** Picks up an unassigned claim: SUBMITTED → UNDER_REVIEW, assigned to the caller. */
@@ -57,11 +53,7 @@ public class StaffClaimService {
 
     public ClaimDetailResponse changeReserve(CurrentUser user, String claimNumber, BigDecimal amount, String reason) {
         Claim claim = findClaimAssignedTo(user, claimNumber);
-        BigDecimal previous = claim.getReserveAmount();
-        claim.changeReserve(amount);
-        // Reserve changes are not stored in a history table yet; the log keeps who/why for now.
-        log.info("Reserve of {} changed from {} to {} {} by {}: {}", claimNumber, previous, amount,
-                claim.getCurrency(), user.id(), reason);
+        claim.changeReserve(amount, user.id(), reason);
         return toDetail(claim);
     }
 
@@ -101,6 +93,6 @@ public class StaffClaimService {
     }
 
     private ClaimDetailResponse toDetail(Claim claim) {
-        return ClaimMapper.toDetail(claim, informationRequestRepository.findByClaimOrderByRequestedAtAscIdAsc(claim));
+        return ClaimMapper.toDetail(claim, informationRequestRepository.findByClaimOrderByRequestedAtAscIdAsc(claim), true);
     }
 }
