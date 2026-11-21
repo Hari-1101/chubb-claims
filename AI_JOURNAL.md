@@ -240,3 +240,54 @@ notifications. All worked.
   mean the app worked. The tests just never clicked the button. If I hadn't
   tested it myself I would've found this live in front of the panel. Lesson:
   don't accept "done" until I've actually used the feature myself.
+
+  ### 19:20 Step 6: finishing
+Claude Code made the app start with one command (docker compose up --build),
+moved integration tests to their own database and Kafka topic so they don't
+mess up my demo data, and finished the README and ARCHITECTURE docs. It also
+cloned the repo into a fresh folder and checked it builds, runs and passes all
+tests from scratch: 59 backend + 16 frontend.
+
+- It worded the Spring Boot 3.5 reason in the README itself. Checked it: it
+  covered the stability and library support, but was missing my reason about
+  upgrade risk and the plan to move to 4.x. Added that.
+- It said it hadn't clicked through the Docker version in a browser, same gap
+  as Step 5. So I reset to a clean database and did a full run-through myself:
+  submit, assign, request info, answer, approve, settle, dashboard. All worked.
+- At first I thought settled claims disappearing from the queue was a bug,
+  but it's the open-only default I chose in Step 3. Exposure going to "No open
+  claims" is right too, since settled claims aren't a liability any more.
+- Rough edges I'm leaving and listed in the README: base images not pinned to
+  exact versions, only one copy can run at a time, Kafka-down not tested.
+
+- My take: Testing from a fresh clone matters. "Works on my machine" isn't
+  enough if the panel can't start it. Glad the test data problem got fixed,
+  because the demo now starts clean with only seed data.
+
+---
+
+## Reflection
+
+What went well:
+- Planned the design before writing any code, so each step had clear rules
+  (CLAUDE.md) for Claude Code to follow.
+- Built in small steps with a commit after each one, so I could review as I
+  went instead of getting one huge dump of code.
+- Testing the UI myself found a real bug that every automated test missed.
+
+What I'd do differently:
+- Click through the UI after every frontend change, not only at the end.
+- Read the AI's "assumptions" section carefully from the start. That's where
+  the important small decisions were.
+
+How I used AI:
+- Claude (chat) for understanding the brief, planning, and writing each step's
+  prompt. Claude Code for building.
+- I made the business decisions myself (reserve cap, hiding the reserve,
+  open-only queue, consistent forms) and pushed back when something didn't
+  fit.
+
+---
+
+**Time spent:** 4:00pm to 7:35pm = about 3.5 hours
+(Installing and setting up tools took about 50 minutes of that.)
