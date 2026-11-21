@@ -44,6 +44,10 @@ springdoc:
   api-docs:
     path: /v3/api-docs
 
+logging:
+  level:
+    org.apache.kafka: WARN   # the Kafka client logs its full config at INFO on every start
+
 management:
   endpoints:
     web:
