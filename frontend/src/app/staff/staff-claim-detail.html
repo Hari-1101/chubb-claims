@@ -33,9 +33,11 @@
       <p class="muted" data-testid="no-actions">{{ noActionsReason() || 'No actions available.' }}</p>
     }
 
+    <!-- Forms without [formGroup] have no Angular form directive, so (ngSubmit) would never fire and the browser
+         would do a native submit (page reload). They listen to the native (submit) event and prevent the reload. -->
     @switch (openForm()) {
       @case ('requestInformation') {
-        <form class="form action-form" (ngSubmit)="requestInformation()" novalidate>
+        <form class="form action-form" (submit)="$event.preventDefault(); requestInformation()" novalidate>
           <label>
             Question for the claimant
             <textarea [formControl]="question" rows="3" maxlength="2000"></textarea>
@@ -70,7 +72,7 @@
         </form>
       }
       @case ('approve') {
-        <form class="form action-form" (ngSubmit)="approve()" novalidate>
+        <form class="form action-form" (submit)="$event.preventDefault(); approve()" novalidate>
           <label>
             Reason (optional)
             <input type="text" [formControl]="approveReason" maxlength="500" />
@@ -79,7 +81,7 @@
         </form>
       }
       @case ('reject') {
-        <form class="form action-form" (ngSubmit)="reject()" novalidate>
+        <form class="form action-form" (submit)="$event.preventDefault(); reject()" novalidate>
           <label>
             Reason (required, shown to the claimant)
             <input type="text" [formControl]="rejectReason" maxlength="500" />

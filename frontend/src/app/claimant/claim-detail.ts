@@ -21,7 +21,7 @@ import { notBlank } from '../shared/validators';
         <section class="card highlight">
           <h2>We need more information</h2>
           <p><strong>{{ request.question }}</strong></p>
-          <form class="form" (ngSubmit)="respond(request.id)" novalidate>
+          <form class="form" (submit)="$event.preventDefault(); respond(request.id)" novalidate>
             <textarea [formControl]="response" rows="4" maxlength="2000" placeholder="Your answer"></textarea>
             @if (response.invalid && response.touched) {
               <span class="field-error">Please enter your answer (up to 2000 characters).</span>
