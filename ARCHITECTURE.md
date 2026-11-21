@@ -131,13 +131,16 @@ messages, the database guarantees bad data can never be stored even if a bug sli
 
 All in `Claim` (and `ClaimStatus` for transitions), so they're tested without Spring or a database:
 
-- **Creation** (`Claim.submit`): status `SUBMITTED`, reserve = estimate, type/market/currency copied from the policy.
+- **Creation** (`Claim.submit`): status `SUBMITTED`, type/market/currency copied from the policy. The estimate is
+  stored exactly as the claimant entered it; the reserve starts at `min(estimate, coverage limit)`. A claimant may
+  well estimate more than their cover; that isn't a reason to reject the claim, but our liability can't exceed it.
 - **Incident date** can't be in the future. "Today" is evaluated in the claim's market time zone (`Market.zone()`),
   so a claimant in Sydney isn't rejected because the server clock is still on yesterday.
-- **Reserve** must be ≥ 0 and ≤ the policy coverage limit (`Claim.changeReserve`). Because reserve starts equal to
-  the estimate, an estimate above the coverage limit is rejected at submission.
+- **Reserve** must be ≥ 0 and ≤ the policy coverage limit (`Claim.changeReserve`).
 - **Claim number**: `CLM-<MARKET>-<YEAR>-<6-digit sequence>`, e.g. `CLM-SG-2026-000001`. The sequence part comes
-  from a single Postgres sequence (unique under concurrency, shared by all markets, never reset).
+  from a single Postgres sequence (unique under concurrency, shared by all markets, never reset). A possible
+  production change is a separate sequence per market (and/or per year), so each market's numbers run 000001,
+  000002, … on their own; that needs a sequence per market or a counter table, so we keep one sequence for now.
 - Rule violations throw `BusinessRuleException`; invalid status moves throw `InvalidStatusTransitionException`.
 
 ## 7. Claim lifecycle

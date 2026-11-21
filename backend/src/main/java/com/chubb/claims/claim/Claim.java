@@ -97,7 +97,8 @@ public class Claim {
 
     /**
      * Creates a new claim in status SUBMITTED.
-     * Type, market and currency are copied from the policy; the reserve starts equal to the estimate.
+     * Type, market and currency are copied from the policy; the reserve starts at
+     * min(estimate, policy coverage limit).
      *
      * @param claimNumber  pre-generated claim number (see {@link ClaimNumberGenerator})
      * @param submittedBy  id of the user submitting the claim (recorded in the status history)
@@ -132,7 +133,8 @@ public class Claim {
         claim.incidentDate = incidentDate;
         claim.description = description;
         claim.estimatedAmount = estimatedAmount;
-        claim.changeReserve(estimatedAmount);
+        // The estimate is kept exactly as entered; the reserve can never exceed what the policy covers.
+        claim.changeReserve(estimatedAmount.min(policy.getCoverageLimit()));
         claim.status = ClaimStatus.SUBMITTED;
         claim.createdAt = Instant.now();
         claim.updatedAt = claim.createdAt;

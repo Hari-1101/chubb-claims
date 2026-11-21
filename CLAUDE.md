@@ -50,7 +50,8 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
 - `Notification` (later step): claimId, recipientEmail, message, createdAt.
 
 ## Claim rules (all in `Claim` / `ClaimStatus`, never in controllers or services)
-- Created via `Claim.submit(...)`: status SUBMITTED; reserveAmount = estimatedAmount; type, market and currency
+- Created via `Claim.submit(...)`: status SUBMITTED; estimatedAmount kept exactly as entered;
+  reserveAmount = min(estimatedAmount, policy coverageLimit); type, market and currency
   copied from the policy; an initial history row (from = null, to = SUBMITTED) is written.
 - incidentDate cannot be in the future ("today" = today in the claim's market time zone, see `Market`).
 - reserveAmount must be >= 0 and <= policy coverageLimit (`Claim.changeReserve`).

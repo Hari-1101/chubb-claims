@@ -71,7 +71,7 @@ class ClaimTest {
             assertEquals(Market.AU, claim.getMarket());
             assertEquals("AUD", claim.getCurrency());
             assertEquals(new BigDecimal("45000.50"), claim.getEstimatedAmount());
-            assertEquals(new BigDecimal("45000.50"), claim.getReserveAmount(), "reserve starts equal to estimate");
+            assertEquals(new BigDecimal("45000.50"), claim.getReserveAmount(), "reserve starts equal to estimate when within cover");
             assertNull(claim.getAssignedOfficerId());
             assertNotNull(claim.getCreatedAt());
             assertEquals(claim.getCreatedAt(), claim.getUpdatedAt());
@@ -126,10 +126,10 @@ class ClaimTest {
         }
 
         @Test
-        void estimateAboveCoverageLimitIsRejectedBecauseReserveWouldExceedIt() {
-            Policy policy = policy(Market.SG, ProductType.MOTOR, "150000.00");
-            BusinessRuleException ex = assertThrows(BusinessRuleException.class, () -> newClaim(policy, "150000.01"));
-            assertTrue(ex.getMessage().contains("exceeds the policy coverage limit"));
+        void estimateAboveCoverageLimitIsKeptButReserveIsCappedAtTheLimit() {
+            Claim claim = newClaim(policy(Market.SG, ProductType.MOTOR, "150000.00"), "200000.00");
+            assertEquals(new BigDecimal("200000.00"), claim.getEstimatedAmount(), "estimate kept as entered");
+            assertEquals(new BigDecimal("150000.00"), claim.getReserveAmount(), "reserve capped at coverage limit");
         }
     }
 
