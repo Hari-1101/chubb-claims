@@ -1,5 +1,5 @@
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ClaimApi } from '../core/api/claim-api';
 import { ClaimDetail } from '../core/models/api.models';
@@ -21,9 +21,9 @@ import { notBlank } from '../shared/validators';
         <section class="card highlight">
           <h2>We need more information</h2>
           <p><strong>{{ request.question }}</strong></p>
-          <form class="form" (submit)="$event.preventDefault(); respond(request.id)" novalidate>
-            <textarea [formControl]="response" rows="4" maxlength="2000" placeholder="Your answer"></textarea>
-            @if (response.invalid && response.touched) {
+          <form class="form" [formGroup]="answerForm" (ngSubmit)="respond(request.id)" novalidate>
+            <textarea formControlName="response" rows="4" maxlength="2000" placeholder="Your answer"></textarea>
+            @if (answerForm.controls.response.invalid && answerForm.controls.response.touched) {
               <span class="field-error">Please enter your answer (up to 2000 characters).</span>
             }
             <div class="actions">
@@ -62,9 +62,11 @@ export class ClaimantClaimDetail implements OnInit {
   protected readonly claim = signal<ClaimDetail | null>(null);
   protected readonly failed = signal(false);
   protected readonly saving = signal(false);
-  protected readonly response = new FormControl('', {
-    nonNullable: true,
-    validators: [Validators.required, notBlank, Validators.maxLength(2000)],
+  protected readonly answerForm = new FormGroup({
+    response: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, notBlank, Validators.maxLength(2000)],
+    }),
   });
 
   protected readonly openRequest = computed(() => this.claim()?.informationRequests.find((r) => !r.response));
@@ -77,15 +79,15 @@ export class ClaimantClaimDetail implements OnInit {
   }
 
   protected respond(requestId: number): void {
-    if (this.response.invalid) {
-      this.response.markAsTouched();
+    if (this.answerForm.invalid) {
+      this.answerForm.markAllAsTouched();
       return;
     }
     this.saving.set(true);
-    this.claimApi.respondToInformationRequest(this.claimNumber(), requestId, this.response.value.trim()).subscribe({
+    this.claimApi.respondToInformationRequest(this.claimNumber(), requestId, this.answerForm.getRawValue().response.trim()).subscribe({
       next: (claim) => {
         this.claim.set(claim);
-        this.response.reset();
+        this.answerForm.reset();
         this.saving.set(false);
       },
       error: () => this.saving.set(false),

@@ -33,15 +33,13 @@
       <p class="muted" data-testid="no-actions">{{ noActionsReason() || 'No actions available.' }}</p>
     }
 
-    <!-- Forms without [formGroup] have no Angular form directive, so (ngSubmit) would never fire and the browser
-         would do a native submit (page reload). They listen to the native (submit) event and prevent the reload. -->
     @switch (openForm()) {
       @case ('requestInformation') {
-        <form class="form action-form" (submit)="$event.preventDefault(); requestInformation()" novalidate>
+        <form class="form action-form" [formGroup]="questionForm" (ngSubmit)="requestInformation()" novalidate>
           <label>
             Question for the claimant
-            <textarea [formControl]="question" rows="3" maxlength="2000"></textarea>
-            @if (question.invalid && question.touched) {
+            <textarea formControlName="question" rows="3" maxlength="2000"></textarea>
+            @if (questionForm.controls.question.invalid && questionForm.controls.question.touched) {
               <span class="field-error">Please enter a question (up to 2000 characters).</span>
             }
           </label>
@@ -72,20 +70,20 @@
         </form>
       }
       @case ('approve') {
-        <form class="form action-form" (submit)="$event.preventDefault(); approve()" novalidate>
+        <form class="form action-form" [formGroup]="approveForm" (ngSubmit)="approve()" novalidate>
           <label>
             Reason (optional)
-            <input type="text" [formControl]="approveReason" maxlength="500" />
+            <input type="text" formControlName="reason" maxlength="500" />
           </label>
           <div class="actions"><button type="submit" [disabled]="busy()">Approve claim</button></div>
         </form>
       }
       @case ('reject') {
-        <form class="form action-form" (submit)="$event.preventDefault(); reject()" novalidate>
+        <form class="form action-form" [formGroup]="rejectForm" (ngSubmit)="reject()" novalidate>
           <label>
             Reason (required, shown to the claimant)
-            <input type="text" [formControl]="rejectReason" maxlength="500" />
-            @if (rejectReason.invalid && rejectReason.touched) {
+            <input type="text" formControlName="reason" maxlength="500" />
+            @if (rejectForm.controls.reason.invalid && rejectForm.controls.reason.touched) {
               <span class="field-error">A reason is required to reject a claim.</span>
             }
           </label>

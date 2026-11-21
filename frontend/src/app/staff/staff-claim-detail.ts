@@ -49,18 +49,25 @@ export class StaffClaimDetail implements OnInit {
     return '';
   });
 
-  protected readonly question = new FormControl('', {
-    nonNullable: true,
-    validators: [Validators.required, notBlank, Validators.maxLength(2000)],
+  // One reactive FormGroup per action form; validation mirrors the backend request records.
+  protected readonly questionForm = new FormGroup({
+    question: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, notBlank, Validators.maxLength(2000)],
+    }),
   });
   protected readonly reserveForm = new FormGroup({
     amount: new FormControl<number | null>(null, [Validators.required, Validators.min(0), money]),
     reason: new FormControl('', { nonNullable: true, validators: [Validators.required, notBlank, Validators.maxLength(500)] }),
   });
-  protected readonly approveReason = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(500)] });
-  protected readonly rejectReason = new FormControl('', {
-    nonNullable: true,
-    validators: [Validators.required, notBlank, Validators.maxLength(500)],
+  protected readonly approveForm = new FormGroup({
+    reason: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(500)] }),
+  });
+  protected readonly rejectForm = new FormGroup({
+    reason: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, notBlank, Validators.maxLength(500)],
+    }),
   });
 
   ngOnInit(): void {
@@ -83,8 +90,8 @@ export class StaffClaimDetail implements OnInit {
   }
 
   protected requestInformation(): void {
-    if (this.invalid(this.question)) return;
-    this.run(this.staffApi.requestInformation(this.claimNumber(), this.question.value.trim()));
+    if (this.invalid(this.questionForm)) return;
+    this.run(this.staffApi.requestInformation(this.claimNumber(), this.questionForm.getRawValue().question.trim()));
   }
 
   protected changeReserve(): void {
@@ -94,22 +101,22 @@ export class StaffClaimDetail implements OnInit {
   }
 
   protected approve(): void {
-    if (this.invalid(this.approveReason)) return;
-    this.run(this.staffApi.approve(this.claimNumber(), this.approveReason.value.trim()));
+    if (this.invalid(this.approveForm)) return;
+    this.run(this.staffApi.approve(this.claimNumber(), this.approveForm.getRawValue().reason.trim()));
   }
 
   protected reject(): void {
-    if (this.invalid(this.rejectReason)) return;
-    this.run(this.staffApi.reject(this.claimNumber(), this.rejectReason.value.trim()));
+    if (this.invalid(this.rejectForm)) return;
+    this.run(this.staffApi.reject(this.claimNumber(), this.rejectForm.getRawValue().reason.trim()));
   }
 
   protected settle(): void {
     this.run(this.staffApi.settle(this.claimNumber()));
   }
 
-  private invalid(control: FormControl | FormGroup): boolean {
-    if (control.invalid) {
-      control.markAllAsTouched();
+  private invalid(form: FormGroup): boolean {
+    if (form.invalid) {
+      form.markAllAsTouched();
       return true;
     }
     return false;
@@ -121,9 +128,9 @@ export class StaffClaimDetail implements OnInit {
     action.subscribe({
       next: () => {
         this.openForm.set(null);
-        this.question.reset();
-        this.approveReason.reset();
-        this.rejectReason.reset();
+        this.questionForm.reset();
+        this.approveForm.reset();
+        this.rejectForm.reset();
         this.reload();
       },
       error: () => this.reload(),
