@@ -58,6 +58,17 @@ See `ARCHITECTURE.md` for the reasoning behind each rule.
   401 identity, 403 access, 404 not found, 409 invalid transition / optimistic lock, 422 other business rules.
 - CORS: only `http://localhost:4200` (property `claims.cors.allowed-origin`).
 
+## Frontend (as built)
+- Angular 22 in `/frontend`: standalone components, signals, zoneless, plain SCSS (`src/styles.scss`), no UI library.
+  Ask before adding any npm package. Tests: Vitest via `ng test` (`npm test -- --watch=false`).
+- `npm start` proxies `/api` to `http://localhost:8080` (`proxy.conf.json`).
+- Folders: `core/` (auth, http interceptors, guards, models, api services), `claimant/`, `staff/`, `shared/`.
+  API calls only in `core/api/*` services; DTO interfaces in `core/models/api.models.ts` must match the backend records.
+- Demo login: `core/auth/demo-users.ts` mirrors the seed data; identity in a signal + sessionStorage;
+  `authInterceptor` adds X-User-Id/X-User-Role to `/api` calls; `roleGuard` protects routes.
+- `errorInterceptor` shows ProblemDetail in the error banner; background polling passes `SILENT_ERRORS`.
+- Staff action visibility mirrors the backend rules in ONE place: `staff/claim-actions.ts` (backend stays authoritative).
+
 ## Caching
 - None, deliberately. Do not add caching. (Redis is noted as a production option for the exposure dashboard only.)
 
